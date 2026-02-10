@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sbuild"
+dynamic = ["version"]
+requires-python = ">=3.12"
+description = "Unified build system for Conan 2 + CMake projects with native and WebAssembly support"
+license = "GPL-3.0-or-later"
+# authors = [{name = "...", email = "..."}]  # TODO: fill in
+dependencies = [
+    "rich>=13.0.0",
+    "typer>=0.21.0",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+]
+
+[project.urls]
+Homepage = "https://github.com/saridacloud/sbuild"
+Repository = "https://github.com/saridacloud/sbuild.git"
+Issues = "https://github.com/saridacloud/sbuild/issues"
+
+[project.scripts]
+sbuild = "sbuild.cli:app"
+
+[tool.setuptools.dynamic]
+version = {attr = "sbuild.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["sbuild*"]
