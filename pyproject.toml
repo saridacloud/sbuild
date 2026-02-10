@@ -8,7 +8,7 @@ dynamic = ["version"]
 requires-python = ">=3.12"
 description = "Unified build system for Conan 2 + CMake projects with native and WebAssembly support"
 license = "GPL-3.0-or-later"
-# authors = [{name = "...", email = "..."}]  # TODO: fill in
+authors = [{name = "Sebastian Brehme", email = "sbrehme@esic-sarida.cloud"}]
 dependencies = [
     "rich>=13.0.0",
     "typer>=0.21.0",
@@ -24,6 +24,9 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
 [project.urls]
 Homepage = "https://github.com/saridacloud/sbuild"
 Repository = "https://github.com/saridacloud/sbuild.git"
@@ -34,6 +37,14 @@ sbuild = "sbuild.cli:app"
 
 [tool.setuptools.dynamic]
 version = {attr = "sbuild.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+filterwarnings = [
+    'ignore:cannot collect test class.*TestReporter:pytest.PytestCollectionWarning',
+]
 
 [tool.setuptools.packages.find]
 include = ["sbuild*"]
