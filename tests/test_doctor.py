@@ -225,6 +225,56 @@ class TestCheckCmakePresets:
         assert conan_debug[0].status == CheckStatus.OK
 
 
+# -- venv check ---------------------------------------------------------------
+
+class TestCheckVenv:
+    """Tests for virtual environment detection in _check_core_tools."""
+
+    def test_venv_active(self, tmp_path):
+        """Inside a venv → OK with path."""
+        report = _make_report(tmp_path)
+        report._vcvars_env = None
+
+        with (
+            patch("sys.prefix", "/some/venv"),
+            patch("sys.base_prefix", "/usr"),
+            patch("sbuild.doctor._check_tool_version", return_value=CheckResult(
+                "tool", CheckStatus.OK, version="1.0",
+            )),
+            patch.object(report, "_check_conan", return_value=CheckResult(
+                "conan", CheckStatus.OK, version="2.1.0",
+            )),
+        ):
+            results = report._check_core_tools()
+
+        venv_results = [r for r in results if r.name == "Virtual env"]
+        assert len(venv_results) == 1
+        assert venv_results[0].status == CheckStatus.OK
+        assert venv_results[0].path is not None
+
+    def test_venv_not_active(self, tmp_path):
+        """Outside a venv → WARN with fix_hint."""
+        report = _make_report(tmp_path)
+        report._vcvars_env = None
+
+        with (
+            patch("sys.prefix", "/usr"),
+            patch("sys.base_prefix", "/usr"),
+            patch("sbuild.doctor._check_tool_version", return_value=CheckResult(
+                "tool", CheckStatus.OK, version="1.0",
+            )),
+            patch.object(report, "_check_conan", return_value=CheckResult(
+                "conan", CheckStatus.OK, version="2.1.0",
+            )),
+        ):
+            results = report._check_core_tools()
+
+        venv_results = [r for r in results if r.name == "Virtual env"]
+        assert len(venv_results) == 1
+        assert venv_results[0].status == CheckStatus.WARN
+        assert "python -m venv" in venv_results[0].fix_hint
+
+
 # -- _find_nsis ---------------------------------------------------------------
 
 class TestFindNsis:

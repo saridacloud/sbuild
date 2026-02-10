@@ -13,6 +13,29 @@ Provides the `sbuild` CLI command with Rich-powered live output, automatic log r
 
 ## Installation
 
+### Recommended: Use a virtual environment
+
+Create a virtual environment in your project to keep sbuild and its dependencies isolated:
+
+```bash
+# Create (once)
+python -m venv .venv
+
+# Activate
+# Windows (cmd)
+.venv\Scripts\activate
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+# Linux / macOS
+source .venv/bin/activate
+
+# Then install sbuild (and other tools like conan) inside the venv
+pip install conan
+pip install git+https://github.com/saridacloud/sbuild.git
+```
+
+> **Tip:** Add `.venv/` to your `.gitignore`.
+
 ### From git server
 
 Install directly from a git repository URL:

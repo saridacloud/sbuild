@@ -152,6 +152,22 @@ class DoctorReport:
             fix_hint="Python >= 3.12 is required" if status != CheckStatus.OK else None,
         ))
 
+        # Virtual environment
+        in_venv = sys.prefix != sys.base_prefix
+        if in_venv:
+            results.append(CheckResult(
+                "Virtual env",
+                CheckStatus.OK,
+                path=Path(sys.prefix),
+            ))
+        else:
+            results.append(CheckResult(
+                "Virtual env",
+                CheckStatus.WARN,
+                message="Not using a virtual environment",
+                fix_hint="Recommended: create a venv with 'python -m venv .venv' and activate it",
+            ))
+
         # CMake
         results.append(_check_tool_version(
             "cmake", ["--version"], required=True,
