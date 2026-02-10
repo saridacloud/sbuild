@@ -1,12 +1,15 @@
 """Tests for sbuild.doctor helper functions."""
 
+import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from sbuild.doctor import (
     CheckResult,
     CheckStatus,
+    DoctorReport,
     _check_path,
     _collect_preset_names,
     _parse_version,
@@ -113,3 +116,109 @@ class TestCheckPath:
         missing = tmp_path / "gone"
         result = _check_path("X", missing)
         assert str(missing) in result.fix_hint
+
+
+# -- _check_cmake_presets (via DoctorReport) -----------------------------------
+
+def _make_report(project_root: Path) -> DoctorReport:
+    """Create a DoctorReport without running platform activation."""
+    with patch.object(DoctorReport, "__post_init__", lambda self: None):
+        report = DoctorReport(project_root=project_root)
+    return report
+
+
+class TestCheckCmakePresets:
+    """Tests for multi-file CMake preset detection in _check_project_config."""
+
+    def test_no_preset_files(self, tmp_path):
+        """No preset files → WARN with correct fix_hint."""
+        (tmp_path / "CMakeLists.txt").write_text('project(Test VERSION 1.0.0)')
+        report = _make_report(tmp_path)
+        results = report._check_project_config()
+
+        preset_results = [r for r in results if r.name == "CMake Presets"]
+        assert len(preset_results) == 1
+        assert preset_results[0].status == CheckStatus.WARN
+        assert "CMakeUserPresets.json" in preset_results[0].message
+        assert "sbuild configure" in preset_results[0].fix_hint
+
+    def test_only_user_presets(self, tmp_path):
+        """Only CMakeUserPresets.json → OK + presets found."""
+        (tmp_path / "CMakeLists.txt").write_text('project(Test VERSION 1.0.0)')
+        presets = {
+            "version": 4,
+            "configurePresets": [
+                {"name": "conan-debug"},
+                {"name": "conan-release"},
+            ],
+        }
+        (tmp_path / "CMakeUserPresets.json").write_text(json.dumps(presets))
+
+        report = _make_report(tmp_path)
+        results = report._check_project_config()
+
+        # Should have an OK result for the file itself
+        file_results = [r for r in results if r.name == "CMakeUserPresets.json"]
+        assert len(file_results) == 1
+        assert file_results[0].status == CheckStatus.OK
+
+        # Presets should be found
+        conan_debug = [r for r in results if r.name == "Preset 'conan-debug'"]
+        assert conan_debug[0].status == CheckStatus.OK
+
+    def test_both_files_merged(self, tmp_path):
+        """Both files present → presets merged from both."""
+        (tmp_path / "CMakeLists.txt").write_text('project(Test VERSION 1.0.0)')
+
+        main_presets = {
+            "version": 4,
+            "configurePresets": [
+                {"name": "conan-debug"},
+                {"name": "conan-release"},
+            ],
+        }
+        user_presets = {
+            "version": 4,
+            "configurePresets": [
+                {"name": "wasm-debug"},
+                {"name": "wasm-release"},
+            ],
+        }
+        (tmp_path / "CMakePresets.json").write_text(json.dumps(main_presets))
+        (tmp_path / "CMakeUserPresets.json").write_text(json.dumps(user_presets))
+        (tmp_path / ".env.wasm").write_text("")  # enable WASM preset expectation
+
+        report = _make_report(tmp_path)
+        results = report._check_project_config()
+
+        # Both files reported as OK
+        file_names = [r.name for r in results if r.status == CheckStatus.OK]
+        assert "CMakePresets.json" in file_names
+        assert "CMakeUserPresets.json" in file_names
+
+        # All four presets found
+        for preset in ("conan-debug", "conan-release", "wasm-debug", "wasm-release"):
+            match = [r for r in results if r.name == f"Preset '{preset}'"]
+            assert match[0].status == CheckStatus.OK
+
+    def test_only_cmake_presets_backward_compat(self, tmp_path):
+        """Only CMakePresets.json (no user presets) → still works."""
+        (tmp_path / "CMakeLists.txt").write_text('project(Test VERSION 1.0.0)')
+        presets = {
+            "version": 4,
+            "configurePresets": [
+                {"name": "conan-debug"},
+                {"name": "conan-release"},
+            ],
+        }
+        (tmp_path / "CMakePresets.json").write_text(json.dumps(presets))
+
+        report = _make_report(tmp_path)
+        results = report._check_project_config()
+
+        file_results = [r for r in results if r.name == "CMakePresets.json"]
+        assert len(file_results) == 1
+        assert file_results[0].status == CheckStatus.OK
+
+        conan_debug = [r for r in results if r.name == "Preset 'conan-debug'"]
+        assert conan_debug[0].status == CheckStatus.OK
