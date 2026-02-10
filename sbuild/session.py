@@ -71,7 +71,6 @@ class BuildSession:
         self.log_path: Optional[Path] = None
         self.console: Optional[LoggingConsole] = None
         self._runner: Optional["BaseRunner"] = None
-        self._error: Optional[Exception] = None
 
     def __enter__(self) -> "BuildSession":
         """Set up logging and create build configuration."""
@@ -111,8 +110,6 @@ class BuildSession:
         suppress_exception = False
 
         if exc_type is not None:
-            self._error = exc_val
-
             if isinstance(exc_val, SystemExit):
                 # SystemExit from exit_with_error() - don't suppress, let it propagate
                 suppress_exception = False

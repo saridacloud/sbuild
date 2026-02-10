@@ -6,7 +6,6 @@ Consolidates logic previously in vcvars.py and NativeConfig._find_vcvars().
 """
 
 import os
-import subprocess
 from pathlib import Path
 
 from ..exceptions import EnvironmentSetupError
@@ -56,22 +55,7 @@ class WindowsEnv(PlatformEnv):
         chain = " && ".join(parts)
         cmd = f'cmd /c "{chain}"'
 
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, env=env,
-        )
-
-        if result.returncode != 0:
-            raise EnvironmentSetupError(
-                f"Toolchain activation failed (rc={result.returncode}): {result.stderr}"
-            )
-
-        captured: dict[str, str] = {}
-        for line in result.stdout.splitlines():
-            if "=" in line:
-                key, _, value = line.partition("=")
-                captured[key] = value
-
-        return captured
+        return self._run_and_capture_env(cmd, env)
 
     @staticmethod
     def _find_vcvars(env_overrides: dict[str, str] | None = None) -> Path | None:

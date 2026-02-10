@@ -79,6 +79,21 @@ class PlatformConfig(ABC):
         return ""
 
 
+
+_ARCH_MAPPING = {
+    "amd64": "x86_64",
+    "x86_64": "x86_64",
+    "i386": "x86",
+    "i686": "x86",
+    "arm64": "armv8",
+    "aarch64": "armv8",
+    "armv8": "armv8",
+    "armv7l": "armv7",
+    "armv7": "armv7",
+    "armv6l": "armv6",
+    "armv6": "armv6",
+}
+
 @dataclass
 class NativeConfig(PlatformConfig):
     """Configuration for native (conan + cmake) builds"""
@@ -102,22 +117,7 @@ class NativeConfig(PlatformConfig):
     def detect_architecture() -> str:
         """Detect system architecture and return Conan architecture string"""
         machine = platform.machine().lower()
-
-        arch_mapping = {
-            "amd64": "x86_64",
-            "x86_64": "x86_64",
-            "i386": "x86",
-            "i686": "x86",
-            "arm64": "armv8",
-            "aarch64": "armv8",
-            "armv8": "armv8",
-            "armv7l": "armv7",
-            "armv7": "armv7",
-            "armv6l": "armv6",
-            "armv6": "armv6",
-        }
-
-        return arch_mapping.get(machine, machine)
+        return _ARCH_MAPPING.get(machine, machine)
 
     def build_dir_name(self, build_type: str) -> str:
         return build_type
@@ -231,8 +231,9 @@ class BuildConfig:
     cmake_args: Optional[str] = None
     build_number: Optional[int] = None  # Override git commit count for packaging
 
-    # Platform-specific config (set during initialization)
+    # Set during initialization
     platform_config: Optional[PlatformConfig] = field(default=None, init=False)
+    _cmake_info: tuple[str, str] = field(default=("unknown", "0.0.0"), init=False, repr=False)
 
     def __post_init__(self):
         """Initialize platform-specific configuration"""
@@ -243,6 +244,9 @@ class BuildConfig:
             raise ConfigError(f"Unknown platform: {self.platform}")
         self.platform_config = factory(self.project_root)
         self.platform_config.validate()
+
+        # Cache CMakeLists.txt parsing (avoids re-parsing on every property access)
+        self._cmake_info = parse_cmake_project_info(self.project_root / "CMakeLists.txt")
 
     @property
     def build_dir(self) -> Path:
@@ -262,14 +266,12 @@ class BuildConfig:
     @property
     def project_name(self) -> str:
         """Return project name from CMakeLists.txt"""
-        name, _ = parse_cmake_project_info(self.project_root / "CMakeLists.txt")
-        return name
+        return self._cmake_info[0]
 
     @property
     def version(self) -> str:
         """Return project version from CMakeLists.txt"""
-        _, version = parse_cmake_project_info(self.project_root / "CMakeLists.txt")
-        return version
+        return self._cmake_info[1]
 
     def get_resolved_build_number(self) -> int:
         """Return resolved build number from generated version.h or CLI override"""

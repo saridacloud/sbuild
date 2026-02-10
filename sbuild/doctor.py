@@ -287,62 +287,23 @@ class DoctorReport:
         results.append(CheckResult(".env.wasm", CheckStatus.OK, path=env_file))
 
         # EMSDK path
-        if wasm.emsdk_path.exists():
-            results.append(CheckResult("EMSDK path", CheckStatus.OK, path=wasm.emsdk_path))
-        else:
-            results.append(CheckResult(
-                "EMSDK path", CheckStatus.FAIL,
-                path=wasm.emsdk_path,
-                message="Directory not found",
-                fix_hint=f"EMSDK path does not exist: {wasm.emsdk_path}",
-            ))
+        results.append(_check_path("EMSDK path", wasm.emsdk_path))
 
         # emsdk_env script
         script = "emsdk_env.bat" if self._is_windows else "emsdk_env.sh"
         script_path = wasm.emsdk_path / script
-        if script_path.exists():
-            results.append(CheckResult(f"emsdk_env ({script})", CheckStatus.OK, path=script_path))
-        else:
-            results.append(CheckResult(
-                f"emsdk_env ({script})", CheckStatus.FAIL,
-                path=script_path,
-                message="Script not found",
-                fix_hint=f"Expected {script} inside EMSDK directory",
-            ))
+        results.append(_check_path(
+            f"emsdk_env ({script})", script_path,
+            fix_hint=f"Expected {script} inside EMSDK directory",
+        ))
 
-        # QT_WASM_PATH
-        if wasm.qt_wasm_path.exists():
-            results.append(CheckResult("QT_WASM_PATH", CheckStatus.OK, path=wasm.qt_wasm_path))
-        else:
-            results.append(CheckResult(
-                "QT_WASM_PATH", CheckStatus.FAIL,
-                path=wasm.qt_wasm_path,
-                message="Directory not found",
-                fix_hint=f"QT_WASM_PATH does not exist: {wasm.qt_wasm_path}",
-            ))
-
-        # QT_HOST_PATH
-        if wasm.qt_host_path.exists():
-            results.append(CheckResult("QT_HOST_PATH", CheckStatus.OK, path=wasm.qt_host_path))
-        else:
-            results.append(CheckResult(
-                "QT_HOST_PATH", CheckStatus.FAIL,
-                path=wasm.qt_host_path,
-                message="Directory not found",
-                fix_hint=f"QT_HOST_PATH does not exist: {wasm.qt_host_path}",
-            ))
+        # QT paths
+        results.append(_check_path("QT_WASM_PATH", wasm.qt_wasm_path))
+        results.append(_check_path("QT_HOST_PATH", wasm.qt_host_path))
 
         # OpenSSL (optional)
         if wasm.openssl_path is not None:
-            if wasm.openssl_path.exists():
-                results.append(CheckResult("OpenSSL path", CheckStatus.OK, path=wasm.openssl_path))
-            else:
-                results.append(CheckResult(
-                    "OpenSSL path", CheckStatus.WARN,
-                    path=wasm.openssl_path,
-                    message="Directory not found",
-                    fix_hint=f"OPENSSL path does not exist: {wasm.openssl_path}",
-                ))
+            results.append(_check_path("OpenSSL path", wasm.openssl_path, required=False))
 
         return results
 
@@ -490,6 +451,31 @@ def _status_markup(status: CheckStatus) -> str:
     return "[red] FAIL [/red]"
 
 
+
+def _check_path(
+    name: str,
+    path: Path,
+    *,
+    required: bool = True,
+    fix_hint: str | None = None,
+) -> CheckResult:
+    """Check if a path exists and return an appropriate CheckResult."""
+    if path.exists():
+        return CheckResult(name, CheckStatus.OK, path=path)
+    return CheckResult(
+        name,
+        CheckStatus.FAIL if required else CheckStatus.WARN,
+        path=path,
+        message="Directory not found" if path.suffix == "" else "Not found",
+        fix_hint=fix_hint or f"{name} path does not exist: {path}",
+    )
+
+
+def _parse_version(output: str) -> str | None:
+    """Extract a version string (x.y or x.y.z) from command output."""
+    match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
+    return match.group(1) if match else None
+
 def _check_tool_version(
     tool: str,
     version_args: list[str],
@@ -507,8 +493,7 @@ def _check_tool_version(
             timeout=5,
         )
         output = result.stdout + result.stderr
-        match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
-        version = match.group(1) if match else None
+        version = _parse_version(output)
         path = _which(tool)
         return CheckResult(tool, CheckStatus.OK, version=version, path=path)
     except FileNotFoundError:
@@ -528,8 +513,7 @@ def _check_tool_version(
                 if result.returncode != 0:
                     raise FileNotFoundError
                 output = result.stdout + result.stderr
-                match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
-                version = match.group(1) if match else None
+                version = _parse_version(output)
                 label = f"{version} (via vcvars64)" if version else "(via vcvars64)"
                 return CheckResult(tool, CheckStatus.OK, version=label)
             except (FileNotFoundError, subprocess.TimeoutExpired):

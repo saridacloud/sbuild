@@ -7,7 +7,7 @@ This package provides a unified build system for native and WebAssembly builds.
 __version__ = "2.0.0"
 
 from .logging import LogManager, LoggingConsole
-from .console import console, get_console
+from .console import console
 from .config import BuildConfig, NativeConfig, PlatformConfig, WasmConfig
 from .exceptions import BuildError, ConfigError, EnvironmentSetupError
 from .session import BuildSession
@@ -17,7 +17,6 @@ __all__ = [
     "LogManager",
     "LoggingConsole",
     "console",
-    "get_console",
     "BuildConfig",
     "NativeConfig",
     "PlatformConfig",

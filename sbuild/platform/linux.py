@@ -5,10 +5,8 @@ Passthrough environment with optional script sourcing.
 """
 
 import os
-import subprocess
 from pathlib import Path
 
-from ..exceptions import EnvironmentSetupError
 from .base import PlatformEnv
 
 
@@ -34,19 +32,4 @@ class LinuxEnv(PlatformEnv):
         sources = " && ".join(f'source "{script}"' for script in extra_scripts)
         cmd = f'bash -c "{sources} && env"'
 
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, env=env,
-        )
-
-        if result.returncode != 0:
-            raise EnvironmentSetupError(
-                f"Script activation failed (rc={result.returncode}): {result.stderr}"
-            )
-
-        captured: dict[str, str] = {}
-        for line in result.stdout.splitlines():
-            if "=" in line:
-                key, _, value = line.partition("=")
-                captured[key] = value
-
-        return captured
+        return self._run_and_capture_env(cmd, env)

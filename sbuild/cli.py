@@ -51,33 +51,44 @@ def _get_build_types(all_configs: bool, release: bool) -> list[str]:
     return ["release" if release else "debug"]
 
 
-def _do_rebuild(
+def _do_build(
     platform: str,
     build_type: str,
-    verbose: bool,
     jobs: int,
-    cmake_args: Optional[str],
+    verbose: bool,
     build_number: Optional[int],
+    cmake_args: Optional[str],
+    clean_first: bool = False,
+    always_configure: bool = False,
 ):
-    """Execute rebuild action for a single build type."""
+    """Execute build action.
+
+    Args:
+        clean_first: Always clean before building
+        always_configure: Always run configure step (not just when build dir is missing)
+    """
     with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number) as session:
-        session.show_header("rebuild")
+        action = "rebuild" if (clean_first and always_configure) else "build"
+        session.show_header(action)
 
-        if not session.runner.clean():
-            session.show_failure("clean")
-            session.exit_with_error()
+        if clean_first:
+            if not session.runner.clean():
+                session.show_failure("clean")
+                session.exit_with_error()
+            if action == "rebuild":
+                session.console.print()
 
-        session.console.print()
-
-        if not session.runner.configure():
-            session.show_failure("configure")
-            session.exit_with_error()
+        # Configure if forced or if build dir doesn't exist yet
+        if always_configure or not session.config.build_dir.exists():
+            if not session.runner.configure():
+                session.show_failure("configure")
+                session.exit_with_error()
 
         if not session.runner.build():
             session.show_failure("build")
             session.exit_with_error()
 
-        session.show_success("rebuild")
+        session.show_success(action)
 
 
 @app.callback(invoke_without_command=True)
@@ -95,7 +106,7 @@ def main(
     if ctx.invoked_subcommand is None:
         # Default to build command
         build_type = "release" if release else "debug"
-        _do_build(platform, build_type, clean, jobs, verbose, build_number, cmake_args)
+        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=clean)
 
 
 @app.command()
@@ -123,7 +134,7 @@ def build(
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
-        _do_build(platform, build_type, clean, jobs, verbose, build_number, cmake_args)
+        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=clean)
 
 
 @app.command()
@@ -147,7 +158,7 @@ def rebuild(
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
-        _do_rebuild(platform, build_type, verbose, jobs, cmake_args, build_number)
+        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=True, always_configure=True)
 
 
 @app.command()
@@ -258,7 +269,7 @@ def package(
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
         if fresh:
-            _do_rebuild(platform, build_type, verbose, jobs, None, None)
+            _do_build(platform, build_type, jobs, verbose, None, None, clean_first=True, always_configure=True)
 
         with BuildSession(platform, build_type) as session:
             if session.runner.package(generator):
@@ -362,38 +373,6 @@ def test(
 
         if not success:
             session.exit_with_error()
-
-
-def _do_build(
-    platform: str,
-    build_type: str,
-    clean: bool,
-    jobs: int,
-    verbose: bool,
-    build_number: Optional[int],
-    cmake_args: Optional[str],
-):
-    """Execute build action."""
-    with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number) as session:
-        session.show_header("build")
-
-        if clean:
-            if not session.runner.clean():
-                session.show_failure("clean")
-                session.exit_with_error()
-
-        # Check if build directory exists for incremental build
-        if not session.config.build_dir.exists():
-            # First time build - need to configure
-            if not session.runner.configure():
-                session.show_failure("configure")
-                session.exit_with_error()
-
-        if not session.runner.build():
-            session.show_failure("build")
-            session.exit_with_error()
-
-        session.show_success("build")
 
 
 if __name__ == "__main__":
