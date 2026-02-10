@@ -314,6 +314,27 @@ def serve(
 
 
 @app.command()
+def doctor(
+    verbose: VerboseOpt = False,
+):
+    """
+    Check environment health and diagnose setup issues.
+
+    [bold]Examples:[/bold]
+
+      [cyan]sbuild doctor[/cyan]                    Run all checks
+      [cyan]sbuild doctor -v[/cyan]                 Show tool paths
+    """
+    from .doctor import DoctorReport
+
+    report = DoctorReport(Path.cwd(), verbose)
+    passed = report.check_all()
+    report.display()
+    if not passed:
+        raise typer.Exit(1)
+
+
+@app.command()
 def test(
     release: ReleaseOpt = False,
     platform: PlatformOpt = "native",

@@ -11,6 +11,7 @@ from typing import Optional
 from ..config import BuildConfig
 from ..console import console
 from ..logging import LogManager
+from ..platform import IS_WINDOWS, create_platform_env
 from .base import BaseRunner
 
 
@@ -19,11 +20,10 @@ class NativeRunner(BaseRunner):
 
     def __init__(self, config: BuildConfig, log_manager: Optional[LogManager] = None):
         super().__init__(config, log_manager)
-        self._env: Optional[dict[str, str]] = None
+        self._env: dict[str, str] = dict(os.environ)
 
         # Load environment variables from .env file if available
         if config.native_config and config.native_config.env_vars:
-            self._env = dict(os.environ)
             self._env.update(config.native_config.env_vars)
 
             # Add Qt IFW bin directory to PATH if configured
@@ -32,19 +32,18 @@ class NativeRunner(BaseRunner):
                 if qt_ifw_bin.exists():
                     self._env["PATH"] = str(qt_ifw_bin) + os.pathsep + self._env.get("PATH", "")
 
+        # Activate platform toolchain (vcvars on Windows, passthrough on Linux)
+        self._platform = create_platform_env(
+            env_overrides=config.native_config.env_vars if config.native_config else None,
+        )
+        self._env = self._platform.activate(base_env=self._env)
+
     def _get_command_env(self) -> Optional[dict[str, str]]:
         """Get environment variables for command execution"""
         return self._env
 
     def _prepare_command(self, cmd: str) -> str:
-        """Wrap command with vcvars64 on Windows"""
-        if (
-            self.config.is_windows
-            and self.config.native_config
-            and self.config.native_config.vcvars_path
-        ):
-            vcvars = self.config.native_config.vcvars_path
-            return f'cmd /c ""{vcvars}" && {cmd}"'
+        """No-op: vcvars env is now passed via env= parameter"""
         return cmd
 
     def configure(self) -> bool:
@@ -85,11 +84,11 @@ class NativeRunner(BaseRunner):
     def show_setup_info(self) -> None:
         """Show native build setup information"""
         if self.config.native_config:
-            if self.config.is_windows:
-                if self.config.native_config.vcvars_path:
+            if IS_WINDOWS:
+                if self._platform.toolchain_path:
                     if self.config.verbose:
                         console.print(
-                            f"[green]Found vcvars64:[/green] [dim]{self.config.native_config.vcvars_path}[/dim]"
+                            f"[green]Found vcvars64:[/green] [dim]{self._platform.toolchain_path}[/dim]"
                         )
                 else:
                     console.print(

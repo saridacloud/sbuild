@@ -52,7 +52,6 @@ def parse_cmake_project_info(cmake_file: Path) -> tuple[str, str]:
 class NativeConfig:
     """Configuration for native (conan + cmake) builds"""
 
-    vcvars_path: Optional[Path] = None
     arch: str = "x86_64"
     env_vars: dict[str, str] = field(default_factory=dict)
 
@@ -60,29 +59,16 @@ class NativeConfig:
     def detect(cls, project_root: Optional[Path] = None) -> "NativeConfig":
         """Auto-detect native build configuration"""
         config = cls()
-        config.arch = cls._detect_architecture()
+        config.arch = cls.detect_architecture()
 
-        # Load optional .env file for additional environment variables
         if project_root:
             env_file = project_root / ".env"
             config.env_vars = load_env_file(env_file)
 
-        if platform.system() == "Windows":
-            # Check .env and OS environment for explicit VCVARS_PATH
-            vcvars_override = config.env_vars.get("VCVARS_PATH") or os.environ.get("VCVARS_PATH")
-            if vcvars_override:
-                path = Path(vcvars_override)
-                if path.exists():
-                    config.vcvars_path = path
-                else:
-                    raise ConfigError(f"VCVARS_PATH not found: {vcvars_override}")
-            else:
-                config.vcvars_path = cls._find_vcvars()
-
         return config
 
     @staticmethod
-    def _detect_architecture() -> str:
+    def detect_architecture() -> str:
         """Detect system architecture and return Conan architecture string"""
         machine = platform.machine().lower()
 
@@ -101,24 +87,6 @@ class NativeConfig:
         }
 
         return arch_mapping.get(machine, machine)
-
-    @staticmethod
-    def _find_vcvars() -> Optional[Path]:
-        """Find vcvars64.bat path on Windows"""
-        possible_paths = [
-            "C:/Program Files/Microsoft Visual Studio/2022/Professional/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Professional/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Auxiliary/Build/vcvars64.bat",
-        ]
-
-        for path_str in possible_paths:
-            path = Path(path_str)
-            if path.exists():
-                return path
-        return None
 
 
 @dataclass

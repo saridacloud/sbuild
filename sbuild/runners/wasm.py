@@ -5,15 +5,14 @@ Build runner for WebAssembly (emscripten + cmake) builds.
 """
 
 import os
-import platform
-import subprocess
 from pathlib import Path
 from typing import Optional
 
-from ..config import BuildConfig, NativeConfig
+from ..config import BuildConfig
 from ..console import console
 from ..exceptions import EnvironmentSetupError
 from ..logging import LogManager
+from ..platform import IS_WINDOWS, create_platform_env
 from .base import BaseRunner
 
 
@@ -23,13 +22,8 @@ class WasmRunner(BaseRunner):
     def __init__(self, config: BuildConfig, log_manager: Optional[LogManager] = None):
         super().__init__(config, log_manager)
         self._activated_env: Optional[dict[str, str]] = None
-        self._vcvars_path: Optional[Path] = None
+        self._platform = create_platform_env()
 
-        # On Windows, we also need vcvars64 for cmake/ninja
-        if platform.system() == "Windows":
-            self._vcvars_path = NativeConfig._find_vcvars()
-
-        # Validate WASM config on initialization
         if config.wasm_config:
             config.wasm_config.validate()
             self._activated_env = self._activate_emscripten()
@@ -41,62 +35,19 @@ class WasmRunner(BaseRunner):
 
         emsdk_path = self.config.wasm_config.emsdk_path
         env = dict(os.environ)
-
-        # Add WASM config to environment
         env.update(self.config.wasm_config.get_environment())
 
-        if platform.system() == "Windows":
-            # Run vcvars64 + emsdk_env.bat and capture resulting environment
-            emsdk_env_bat = emsdk_path / "emsdk_env.bat"
-            if not emsdk_env_bat.exists():
-                raise EnvironmentSetupError(f"emsdk_env.bat not found: {emsdk_env_bat}")
+        script_name = "emsdk_env.bat" if IS_WINDOWS else "emsdk_env.sh"
+        emsdk_script = emsdk_path / script_name
+        if not emsdk_script.exists():
+            raise EnvironmentSetupError(f"{script_name} not found: {emsdk_script}")
 
-            # Chain vcvars64 (for cmake/ninja) with emsdk_env (for emscripten)
-            if self._vcvars_path:
-                cmd = f'cmd /c ""{self._vcvars_path}" && "{emsdk_env_bat}" && set"'
-            else:
-                # Fall back to just emsdk_env if vcvars not found
-                console.print(
-                    "[yellow]Warning: vcvars64.bat not found. cmake may not be available.[/yellow]"
-                )
-                cmd = f'cmd /c ""{emsdk_env_bat}" && set"'
-
-            result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, env=env
+        if IS_WINDOWS and not self._platform.toolchain_path:
+            console.print(
+                "[yellow]Warning: vcvars64.bat not found. cmake may not be available.[/yellow]"
             )
 
-            if result.returncode != 0:
-                raise EnvironmentSetupError(
-                    f"Failed to activate Emscripten: {result.stderr}"
-                )
-
-            # Parse output to extract environment variables
-            for line in result.stdout.splitlines():
-                if "=" in line:
-                    key, _, value = line.partition("=")
-                    env[key] = value
-        else:
-            # Linux/Mac: source emsdk_env.sh
-            emsdk_env_sh = emsdk_path / "emsdk_env.sh"
-            if not emsdk_env_sh.exists():
-                raise EnvironmentSetupError(f"emsdk_env.sh not found: {emsdk_env_sh}")
-
-            cmd = f'bash -c "source {emsdk_env_sh} && env"'
-            result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, env=env
-            )
-
-            if result.returncode != 0:
-                raise EnvironmentSetupError(
-                    f"Failed to activate Emscripten: {result.stderr}"
-                )
-
-            for line in result.stdout.splitlines():
-                if "=" in line:
-                    key, _, value = line.partition("=")
-                    env[key] = value
-
-        return env
+        return self._platform.activate(extra_scripts=[emsdk_script], base_env=env)
 
     def _get_command_env(self) -> Optional[dict[str, str]]:
         """Get activated Emscripten environment"""
@@ -142,9 +93,9 @@ class WasmRunner(BaseRunner):
     def show_setup_info(self) -> None:
         """Show WASM build setup information"""
         if self.config.verbose and self.config.wasm_config:
-            if self._vcvars_path:
+            if self._platform.toolchain_path:
                 console.print(
-                    f"[green]vcvars64:[/green] [dim]{self._vcvars_path}[/dim]"
+                    f"[green]vcvars64:[/green] [dim]{self._platform.toolchain_path}[/dim]"
                 )
             console.print(
                 f"[green]EMSDK:[/green] [dim]{self.config.wasm_config.emsdk_path}[/dim]"
