@@ -28,6 +28,12 @@ pip install git+https://github.com/saridacloud/sbuild.git@main
 pip install git+https://github.com/saridacloud/sbuild.git@v1.0.0
 ```
 
+Or force to update to the latest commit:
+
+```bash
+pip install --force-reinstall git+https://github.com/saridacloud/sbuild.git@develop
+```
+
 ### From git submodule
 
 If sbuild is included as a git submodule in your project (e.g. at `scripts/`):
