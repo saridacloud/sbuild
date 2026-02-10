@@ -90,7 +90,7 @@ sbuild build --clean                    # Clean before building
 sbuild rebuild                          # Clean + full rebuild
 sbuild configure                        # Configure only (conan install + cmake)
 sbuild test                             # Run unit tests
-sbuild test --filter "Drone.*"          # Run tests matching pattern
+sbuild test --filter "App.*"          # Run tests matching pattern
 sbuild package --release                # Create distribution package
 sbuild package --release -G NSIS        # Windows installer
 sbuild package --release -G ZIP         # ZIP archive
@@ -123,6 +123,13 @@ sbuild build --platform wasm --release  # WASM release build
 sbuild serve --platform wasm            # HTTP server (port 8080)
 sbuild serve --platform wasm --https    # HTTPS server (port 8443)
 ```
+
+### Editor Integration
+
+Pre-configured VS Code tasks are available in [`editors/vscode/tasks.json`](editors/vscode/tasks.json).
+Copy to your project's `.vscode/` directory.
+
+Then use **Ctrl+Shift+B** for build tasks or **Ctrl+Shift+P** → *Tasks: Run Task* for all tasks.
 
 ### Common options
 

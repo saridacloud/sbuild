@@ -167,7 +167,8 @@ def rebuild(
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
-        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=True, always_configure=True)
+        _do_build(platform, build_type, jobs, verbose, build_number,
+                  cmake_args, clean_first=True, always_configure=True)
 
 
 @app.command()
@@ -256,7 +257,8 @@ def package(
     release: ReleaseOpt = False,
     all_configs: AllConfigsOpt = False,
     platform: PlatformOpt = "native",
-    generator: Annotated[Optional[str], typer.Option("--generator", "-G", help="CPack generator (ZIP, NSIS, IFW)")] = None,
+    generator: Annotated[Optional[str], typer.Option(
+        "--generator", "-G", help="CPack generator (ZIP, NSIS, IFW)")] = None,
     fresh: Annotated[bool, typer.Option("--fresh", help="Clean rebuild before packaging")] = False,
     jobs: JobsOpt = DEFAULT_JOBS,
     verbose: VerboseOpt = False,
@@ -350,7 +352,8 @@ def test(
     filter: Annotated[Optional[str], typer.Option("-R", "--filter", help="Run tests matching regex pattern")] = None,
     test_verbose: Annotated[bool, typer.Option("--test-verbose", help="Verbose CTest output")] = False,
     rerun_failed: Annotated[bool, typer.Option("--rerun-failed", help="Re-run only failed tests")] = False,
-    output_on_failure: Annotated[bool, typer.Option("--output-on-failure/--no-output-on-failure", help="Show output on failure")] = True,
+    output_on_failure: Annotated[bool, typer.Option(
+        "--output-on-failure/--no-output-on-failure", help="Show output on failure")] = True,
     jobs: JobsOpt = DEFAULT_JOBS,
     verbose: VerboseOpt = False,
 ):
@@ -362,7 +365,7 @@ def test(
       [cyan]sbuild test[/cyan]                     Run all tests (debug)
       [cyan]sbuild test --release[/cyan]           Run tests for release build
       [cyan]sbuild test --filter Entity[/cyan]     Run tests matching 'Entity'
-      [cyan]sbuild test --filter "Drone.*"[/cyan]  Run tests matching pattern
+      [cyan]sbuild test --filter "App.*"[/cyan]  Run tests matching pattern
       [cyan]sbuild test --rerun-failed[/cyan]      Re-run only failed tests
       [cyan]sbuild test --test-verbose[/cyan]      Show full CTest output
     """

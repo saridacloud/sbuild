@@ -1,0 +1,491 @@
+{
+    // sbuild - VS Code Task Definitions (cross-platform)
+    //
+    // Copy this file to your project's .vscode/ directory:
+    //   mkdir -p .vscode && cp editors/vscode/tasks.json .vscode/     (Linux / macOS)
+    //   mkdir .vscode 2>nul & copy editors\vscode\tasks.json .vscode\ (Windows cmd)
+    //
+    // Usage: Ctrl+Shift+B for default build, Ctrl+Shift+P -> "Tasks: Run Task" for all tasks.
+    // Tasks ending with "..." will prompt you for options via Quick Pick dialogs.
+    //
+    // Commands use .venv paths. Adjust if your virtual environment is elsewhere.
+    "version": "2.0.0",
+    "tasks": [
+        // =====================================================
+        // QUICK ACCESS (no prompts, one-click)
+        // =====================================================
+        {
+            "label": "Build: Debug",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["build"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Build: Release",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["build", "--release"],
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Build: Debug (Clean First)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["build", "--clean"],
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Build: Release (Clean First)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["build", "--release", "--clean"],
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Rebuild: Debug (Full)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["rebuild"],
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Rebuild: Release (Full)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["rebuild", "--release"],
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Rebuild: All (Debug + Release)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["rebuild", "--all"],
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Install: Debug",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["install"],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Install: Release",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["install", "--release"],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Package: Release NSIS (Fresh Build)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
+            },
+            "args": ["package", "--release", "--fresh", "--generator", "NSIS"],
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+
+        // =====================================================
+        // INTERACTIVE (with prompts — "..." means Quick Pick)
+        // =====================================================
+        {
+            "label": "Build...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild build ${input:configDRA} ${input:platform} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
+            },
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Rebuild...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild rebuild ${input:configDRA} ${input:platform} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
+            },
+            "group": "build",
+            "problemMatcher": ["$msCompile", "$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Clean...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild clean ${input:configDR} ${input:platform}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe clean ${input:configDR} ${input:platform}"
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Configure...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild configure ${input:configDR} ${input:platform} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}"
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Install...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild install ${input:configDR} ${input:platform} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe install ${input:configDR} ${input:platform} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}"
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Test: Filter...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Package...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild package ${input:configDRA} ${input:platform} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe package ${input:configDRA} ${input:platform} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}"
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Serve...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}"
+            },
+            "group": "build",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Doctor...",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/sbuild doctor ${input:doctorVerbose}",
+            "windows": {
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe doctor ${input:doctorVerbose}"
+            },
+            "group": "none",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "configDRA",
+            "type": "pickString",
+            "description": "Configuration",
+            "options": [
+                { "label": "Debug",   "value": "" },
+                { "label": "Release", "value": "--release" },
+                { "label": "All",     "value": "--all" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "configDR",
+            "type": "pickString",
+            "description": "Configuration",
+            "options": [
+                { "label": "Debug",   "value": "" },
+                { "label": "Release", "value": "--release" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "platform",
+            "type": "pickString",
+            "description": "Platform",
+            "options": [
+                { "label": "Native",      "value": "" },
+                { "label": "WebAssembly", "value": "--platform wasm" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "buildClean",
+            "type": "pickString",
+            "description": "Clean before build?",
+            "options": [
+                { "label": "No",  "value": "" },
+                { "label": "Yes", "value": "--clean" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "testMode",
+            "type": "pickString",
+            "description": "Test mode",
+            "options": [
+                { "label": "Normal",        "value": "" },
+                { "label": "Verbose",       "value": "--test-verbose" },
+                { "label": "Rerun Failed",  "value": "--rerun-failed" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "testPattern",
+            "type": "promptString",
+            "description": "Test filter regex (e.g. 'App.*')",
+            "default": ""
+        },
+        {
+            "id": "packageGenerator",
+            "type": "pickString",
+            "description": "Package generator",
+            "options": [
+                { "label": "All",  "value": "" },
+                { "label": "NSIS", "value": "--generator NSIS" },
+                { "label": "IFW",  "value": "--generator IFW" },
+                { "label": "ZIP",  "value": "--generator ZIP" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "packageFresh",
+            "type": "pickString",
+            "description": "Fresh build before packaging?",
+            "options": [
+                { "label": "No",  "value": "" },
+                { "label": "Yes", "value": "--fresh" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "serveProtocol",
+            "type": "pickString",
+            "description": "Protocol",
+            "options": [
+                { "label": "HTTP",  "value": "" },
+                { "label": "HTTPS", "value": "--https" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "doctorVerbose",
+            "type": "pickString",
+            "description": "Verbosity",
+            "options": [
+                { "label": "Normal",  "value": "" },
+                { "label": "Verbose", "value": "--verbose" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "verbose",
+            "type": "pickString",
+            "description": "Verbose output?",
+            "options": [
+                { "label": "No",  "value": "" },
+                { "label": "Yes", "value": "--verbose" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "jobs",
+            "type": "pickString",
+            "description": "Parallel jobs",
+            "options": [
+                { "label": "Default (CPU count)", "value": "" },
+                { "label": "1 job",  "value": "--jobs 1" },
+                { "label": "2 jobs", "value": "--jobs 2" },
+                { "label": "4 jobs", "value": "--jobs 4" },
+                { "label": "8 jobs", "value": "--jobs 8" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "outputOnFailure",
+            "type": "pickString",
+            "description": "Show test output on failure?",
+            "options": [
+                { "label": "Yes (default)", "value": "" },
+                { "label": "No",            "value": "--no-output-on-failure" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "systemInstall",
+            "type": "pickString",
+            "description": "Install to system location?",
+            "options": [
+                { "label": "No",  "value": "" },
+                { "label": "Yes", "value": "--system-install" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "buildNumber",
+            "type": "promptString",
+            "description": "Build number override (e.g. --build-number 42, leave empty for auto)",
+            "default": ""
+        },
+        {
+            "id": "cmakeArgs",
+            "type": "promptString",
+            "description": "Extra CMake args (e.g. --cmake-args \"-DFOO=ON\", leave empty for none)",
+            "default": ""
+        },
+        {
+            "id": "installPrefix",
+            "type": "promptString",
+            "description": "Install prefix (e.g. --prefix dist, leave empty for default)",
+            "default": ""
+        },
+        {
+            "id": "installComponent",
+            "type": "promptString",
+            "description": "Component (e.g. --component Runtime, leave empty for all)",
+            "default": ""
+        },
+        {
+            "id": "port",
+            "type": "promptString",
+            "description": "Custom port (e.g. --port 9000, leave empty for default)",
+            "default": ""
+        }
+    ]
+}
