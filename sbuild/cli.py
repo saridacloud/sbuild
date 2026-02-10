@@ -17,7 +17,6 @@ Usage:
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -287,26 +286,16 @@ def serve(
       [cyan]sbuild serve -p wasm --https[/cyan]     HTTPS server on port 8443
       [cyan]sbuild serve -p wasm --port 9000[/cyan] Custom port
     """
-    if platform != "wasm":
-        console.print("[red]Error: 'serve' command is only available for --platform wasm[/red]")
-        console.print("[dim]Usage: sbuild serve --platform wasm[/dim]")
-        raise typer.Exit(1)
-
     build_type = "release" if release else "debug"
-    project_root = Path.cwd()
 
     try:
-        from .config import BuildConfig
-        from .runners import WasmRunner
+        with BuildSession(platform, build_type) as session:
+            if not session.runner.supports_serve:
+                console.print("[red]Error: 'serve' command is not supported for this platform[/red]")
+                console.print("[dim]Usage: sbuild serve --platform wasm[/dim]")
+                raise typer.Exit(1)
 
-        config = BuildConfig(
-            project_root=project_root,
-            build_type=build_type,
-            platform="wasm",
-        )
-
-        runner = WasmRunner(config)
-        runner.serve(https=https, port=port)
+            session.runner.serve(https=https, port=port)
 
     except (BuildError, ConfigError) as e:
         console.print(f"[red]Error: {e}[/red]")
@@ -357,13 +346,13 @@ def test(
       [cyan]sbuild test --rerun-failed[/cyan]      Re-run only failed tests
       [cyan]sbuild test --test-verbose[/cyan]      Show full CTest output
     """
-    if platform == "wasm":
-        console.print("[red]Error: Tests are not supported for WebAssembly builds[/red]")
-        raise typer.Exit(1)
-
     build_type = "release" if release else "debug"
 
     with BuildSession(platform, build_type, verbose, jobs) as session:
+        if not session.runner.supports_tests:
+            console.print("[red]Error: Tests are not supported for this platform[/red]")
+            raise typer.Exit(1)
+
         success = session.runner.run_tests(
             test_filter=filter,
             test_verbose=test_verbose,

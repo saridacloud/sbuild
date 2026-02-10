@@ -147,14 +147,15 @@ class BuildSession:
 
     def _create_runner(self) -> "BaseRunner":
         """Create runner based on platform."""
-        from .runners import NativeRunner, WasmRunner
+        from .runners import RUNNER_REGISTRY
 
         if self.config is None:
             raise RuntimeError("BuildSession not entered - use 'with' statement")
 
-        if self.platform == "wasm":
-            return WasmRunner(self.config, self.log_manager)
-        return NativeRunner(self.config, self.log_manager)
+        runner_cls = RUNNER_REGISTRY.get(self.platform)
+        if runner_cls is None:
+            raise ConfigError(f"Unknown platform: {self.platform}")
+        return runner_cls(self.config, self.log_manager)
 
     def show_header(self, action: str) -> None:
         """Display build header with action and configuration."""
@@ -166,9 +167,10 @@ class BuildSession:
             self.runner.show_setup_info()
 
         mode = f"[cyan]{self.build_type.upper()}[/cyan]"
+        display = self.config.platform_config.display_name
         platform_str = (
-            f" [magenta]{self.platform.upper()}[/magenta]"
-            if self.platform == "wasm"
+            f" [magenta]{display}[/magenta]"
+            if display
             else ""
         )
         self.console.print(

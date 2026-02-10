@@ -6,9 +6,10 @@ Provides dataclasses for build configuration with environment detection.
 
 import os
 import platform
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .exceptions import ConfigError, EnvironmentSetupError
 
@@ -48,8 +49,38 @@ def parse_cmake_project_info(cmake_file: Path) -> tuple[str, str]:
     return name, version
 
 
+
+class PlatformConfig(ABC):
+    """Abstract base for platform-specific build configuration."""
+
+    @abstractmethod
+    def build_dir_name(self, build_type: str) -> str:
+        """Return the build directory name for the given build type."""
+        ...
+
+    @abstractmethod
+    def preset_name(self, build_type: str) -> str:
+        """Return the CMake preset name for the given build type."""
+        ...
+
+    @abstractmethod
+    def get_environment(self) -> dict[str, str]:
+        """Return environment variables dict for subprocess."""
+        ...
+
+    @abstractmethod
+    def validate(self) -> None:
+        """Validate configuration. Raise on errors."""
+        ...
+
+    @property
+    def display_name(self) -> str:
+        """Human-readable platform label (empty for native)."""
+        return ""
+
+
 @dataclass
-class NativeConfig:
+class NativeConfig(PlatformConfig):
     """Configuration for native (conan + cmake) builds"""
 
     arch: str = "x86_64"
@@ -88,14 +119,26 @@ class NativeConfig:
 
         return arch_mapping.get(machine, machine)
 
+    def build_dir_name(self, build_type: str) -> str:
+        return build_type
+
+    def preset_name(self, build_type: str) -> str:
+        return f"conan-{build_type.lower()}"
+
+    def get_environment(self) -> dict[str, str]:
+        return dict(self.env_vars)
+
+    def validate(self) -> None:
+        pass  # Native config is always valid
+
 
 @dataclass
-class WasmConfig:
+class WasmConfig(PlatformConfig):
     """Configuration for WebAssembly builds"""
 
-    emsdk_path: Path
-    qt_wasm_path: Path
-    qt_host_path: Path
+    emsdk_path: Path = field(default_factory=lambda: Path())
+    qt_wasm_path: Path = field(default_factory=lambda: Path())
+    qt_host_path: Path = field(default_factory=lambda: Path())
     openssl_path: Optional[Path] = None
 
     @classmethod
@@ -159,6 +202,22 @@ class WasmConfig:
             env["OPENSSL"] = str(self.openssl_path)
         return env
 
+    def build_dir_name(self, build_type: str) -> str:
+        return f"wasm-{build_type.lower()}"
+
+    def preset_name(self, build_type: str) -> str:
+        return f"wasm-{build_type.lower()}"
+
+    @property
+    def display_name(self) -> str:
+        return "WASM"
+
+
+_CONFIG_FACTORIES: dict[str, Callable[[Path], PlatformConfig]] = {
+    "native": lambda root: NativeConfig.detect(root),
+    "wasm": lambda root: WasmConfig.from_env_file(root / ".env.wasm"),
+}
+
 
 @dataclass
 class BuildConfig:
@@ -172,33 +231,28 @@ class BuildConfig:
     cmake_args: Optional[str] = None
     build_number: Optional[int] = None  # Override git commit count for packaging
 
-    # Platform-specific configs (set during initialization)
-    native_config: Optional[NativeConfig] = field(default=None, init=False)
-    wasm_config: Optional[WasmConfig] = field(default=None, init=False)
+    # Platform-specific config (set during initialization)
+    platform_config: Optional[PlatformConfig] = field(default=None, init=False)
 
     def __post_init__(self):
         """Initialize platform-specific configuration"""
         self.build_type = self.build_type.capitalize()
 
-        if self.platform == "native":
-            self.native_config = NativeConfig.detect(self.project_root)
-        elif self.platform == "wasm":
-            env_file = self.project_root / ".env.wasm"
-            self.wasm_config = WasmConfig.from_env_file(env_file)
+        factory = _CONFIG_FACTORIES.get(self.platform)
+        if factory is None:
+            raise ConfigError(f"Unknown platform: {self.platform}")
+        self.platform_config = factory(self.project_root)
+        self.platform_config.validate()
 
     @property
     def build_dir(self) -> Path:
         """Return appropriate build directory"""
-        if self.platform == "wasm":
-            return self.project_root / "build" / f"wasm-{self.build_type.lower()}"
-        return self.project_root / "build" / self.build_type
+        return self.project_root / "build" / self.platform_config.build_dir_name(self.build_type)
 
     @property
     def preset_name(self) -> str:
         """Return CMake preset name"""
-        if self.platform == "wasm":
-            return f"wasm-{self.build_type.lower()}"
-        return f"conan-{self.build_type.lower()}"
+        return self.platform_config.preset_name(self.build_type)
 
     @property
     def is_windows(self) -> bool:

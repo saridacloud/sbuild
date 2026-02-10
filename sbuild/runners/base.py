@@ -13,7 +13,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from rich.live import Live
 from rich.panel import Panel
@@ -26,6 +26,9 @@ from ..test_reporter import TestReporter
 
 class BaseRunner(ABC):
     """Abstract base class for build runners"""
+
+    supports_tests: ClassVar[bool] = True
+    supports_serve: ClassVar[bool] = False
 
     def __init__(self, config: BuildConfig, log_manager: Optional[LogManager] = None):
         self.config = config
@@ -40,6 +43,11 @@ class BaseRunner(ABC):
     def build(self) -> bool:
         """Execute the build"""
         pass
+
+    def serve(self, **kwargs) -> None:
+        """Start development server. Override in subclasses that support it."""
+        from ..exceptions import BuildError
+        raise BuildError(f"{type(self).__name__} does not support 'serve'")
 
     def clean(self) -> bool:
         """Clean build directory"""
