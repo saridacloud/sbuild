@@ -13,7 +13,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import deque
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from rich.live import Live
 from rich.panel import Panel
@@ -26,6 +26,9 @@ from ..test_reporter import TestReporter
 
 class BaseRunner(ABC):
     """Abstract base class for build runners"""
+
+    supports_tests: ClassVar[bool] = True
+    supports_serve: ClassVar[bool] = False
 
     def __init__(self, config: BuildConfig, log_manager: Optional[LogManager] = None):
         self.config = config
@@ -40,6 +43,11 @@ class BaseRunner(ABC):
     def build(self) -> bool:
         """Execute the build"""
         pass
+
+    def serve(self, **kwargs) -> None:
+        """Start development server. Override in subclasses that support it."""
+        from ..exceptions import BuildError
+        raise BuildError(f"{type(self).__name__} does not support 'serve'")
 
     def clean(self) -> bool:
         """Clean build directory"""
@@ -179,19 +187,6 @@ class BaseRunner(ABC):
         last_lines: deque = deque(maxlen=8)
         process = None
 
-        def read_output(proc, lines_queue, all_lines):
-            """Read output in background thread"""
-            try:
-                for line in iter(proc.stdout.readline, ""):
-                    if line:
-                        stripped_line = line.rstrip()
-                        lines_queue.append(stripped_line)
-                        all_lines.append(stripped_line)
-                        if self.log_manager:
-                            self.log_manager.write(f"  {stripped_line}")
-            except Exception:
-                pass
-
         try:
             process = subprocess.Popen(
                 prepared_cmd,
@@ -206,15 +201,10 @@ class BaseRunner(ABC):
             )
 
             reader_thread = threading.Thread(
-                target=read_output, args=(process, last_lines, all_output)
+                target=self._read_process_output, args=(process, last_lines, all_output)
             )
             reader_thread.daemon = True
             reader_thread.start()
-
-            # Use underlying console for Live context
-            actual_console = (
-                console.console if hasattr(console, "console") else console
-            )
 
             if self.config.verbose:
                 # Verbose mode: show full output
@@ -224,30 +214,7 @@ class BaseRunner(ABC):
                 for line in all_output:
                     console.print(line, highlight=False)
             else:
-                # Normal mode: show live panel
-                with Live(
-                    console=actual_console, refresh_per_second=4, transient=True
-                ) as live:
-                    while process.poll() is None:
-                        lines_to_show = (
-                            list(last_lines) if last_lines else ["[dim]Starting tests...[/dim]"]
-                        )
-
-                        while len(lines_to_show) < 8:
-                            lines_to_show.append("")
-
-                        content = "\n".join(lines_to_show)
-
-                        panel = Panel(
-                            content,
-                            title="[cyan]Running Tests[/cyan]",
-                            border_style="cyan",
-                            expand=True,
-                            height=10,
-                        )
-
-                        live.update(panel)
-                        time.sleep(0.1)
+                self._show_live_panel(process, last_lines, "Running Tests")
 
             return_code = process.returncode
             elapsed = time.time() - start_time
@@ -289,6 +256,51 @@ class BaseRunner(ABC):
     def _get_command_env(self) -> Optional[dict[str, str]]:
         """Get environment variables for command execution. Override in subclasses."""
         return None
+
+    def _read_process_output(self, proc, lines_queue, all_lines):
+        """Read subprocess output in background thread"""
+        try:
+            for line in iter(proc.stdout.readline, ""):
+                if line:
+                    stripped_line = line.rstrip()
+                    lines_queue.append(stripped_line)
+                    all_lines.append(stripped_line)
+                    if self.log_manager:
+                        self.log_manager.write(f"  {stripped_line}")
+        except Exception:
+            pass
+
+    @property
+    def _live_console(self):
+        """Get the underlying Rich Console for Live context"""
+        return console.console if hasattr(console, "console") else console
+
+    def _show_live_panel(self, process, last_lines, title):
+        """Show a Rich Live panel tracking process output until it exits"""
+        with Live(
+            console=self._live_console, refresh_per_second=4, transient=True
+        ) as live:
+            while process.poll() is None:
+                lines_to_show = (
+                    list(last_lines) if last_lines else ["[dim]Starting...[/dim]"]
+                )
+
+                # Pad to 8 lines for consistent height
+                while len(lines_to_show) < 8:
+                    lines_to_show.append("")
+
+                content = "\n".join(lines_to_show)
+
+                panel = Panel(
+                    content,
+                    title=f"[cyan]{title}[/cyan]",
+                    border_style="cyan",
+                    expand=True,
+                    height=10,
+                )
+
+                live.update(panel)
+                time.sleep(0.1)
 
     def run_command(
         self,
@@ -370,22 +382,6 @@ class BaseRunner(ABC):
         return_code = None
         process = None
 
-        def read_output(proc, lines_queue, all_lines):
-            """Read output in background thread"""
-            try:
-                for line in iter(proc.stdout.readline, ""):
-                    if line:
-                        stripped_line = line.rstrip()
-                        lines_queue.append(stripped_line)
-                        all_lines.append(stripped_line)
-                        if self.log_manager:
-                            self.log_manager.write(f"  {stripped_line}")
-            except Exception as e:
-                error_msg = f"Error reading output: {e}"
-                console.print(f"[red]{error_msg}[/red]")
-                if self.log_manager:
-                    self.log_manager.write(error_msg)
-
         try:
             process = subprocess.Popen(
                 cmd,
@@ -400,39 +396,12 @@ class BaseRunner(ABC):
             )
 
             reader_thread = threading.Thread(
-                target=read_output, args=(process, last_lines, all_output)
+                target=self._read_process_output, args=(process, last_lines, all_output)
             )
             reader_thread.daemon = True
             reader_thread.start()
 
-            # Use underlying console for Live context
-            actual_console = (
-                console.console if hasattr(console, "console") else console
-            )
-            with Live(
-                console=actual_console, refresh_per_second=4, transient=True
-            ) as live:
-                while process.poll() is None:
-                    lines_to_show = (
-                        list(last_lines) if last_lines else ["[dim]Starting...[/dim]"]
-                    )
-
-                    # Pad to 8 lines for consistent height
-                    while len(lines_to_show) < 8:
-                        lines_to_show.append("")
-
-                    content = "\n".join(lines_to_show)
-
-                    panel = Panel(
-                        content,
-                        title=f"[cyan]{description}[/cyan]",
-                        border_style="cyan",
-                        expand=True,
-                        height=10,
-                    )
-
-                    live.update(panel)
-                    time.sleep(0.1)
+            self._show_live_panel(process, last_lines, description)
 
             return_code = process.returncode
             elapsed = time.time() - start_time

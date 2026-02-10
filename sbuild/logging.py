@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
-from rich.panel import Panel
 
 
 class LogManager:
@@ -99,6 +98,11 @@ class LogManager:
             self.log_file.close()
 
 
+
+def _strip_rich_markup(text: str) -> str:
+    """Remove Rich markup tags from text."""
+    return re.sub(r"\[/?[a-z_]+.*?\]", "", text)
+
 class LoggingConsole:
     """Wrapper around Rich Console that also logs to file"""
 
@@ -107,9 +111,6 @@ class LoggingConsole:
         self.log_manager = log_manager
         self._original_print = console.print
 
-    def set_log_manager(self, log_manager: LogManager):
-        """Attach log manager"""
-        self.log_manager = log_manager
 
     def print(self, *args, **kwargs):
         """Print to console and log file"""
@@ -118,19 +119,12 @@ class LoggingConsole:
         if self.log_manager:
             text_parts = []
             for arg in args:
-                if isinstance(arg, (Panel, str)):
-                    text = str(arg)
-                    plain_text = re.sub(r"\[/?[a-z_]+.*?\]", "", text)
-                    if not plain_text.startswith("<"):
-                        text_parts.append(plain_text)
-                else:
-                    text = str(arg)
-                    plain_text = re.sub(r"\[/?[a-z_]+.*?\]", "", text)
-                    text_parts.append(plain_text)
+                plain = _strip_rich_markup(str(arg))
+                if not plain.startswith("<"):
+                    text_parts.append(plain)
 
             if text_parts:
-                message = " ".join(text_parts)
-                self.log_manager.write(message)
+                self.log_manager.write(" ".join(text_parts))
 
     def __getattr__(self, name):
         """Delegate other methods to original console"""

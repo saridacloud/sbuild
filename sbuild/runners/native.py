@@ -8,48 +8,55 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from ..config import BuildConfig
+from ..config import BuildConfig, NativeConfig
 from ..console import console
 from ..logging import LogManager
+from ..platform import IS_WINDOWS, create_platform_env
 from .base import BaseRunner
 
 
 class NativeRunner(BaseRunner):
     """Build runner for native (conan + cmake) builds"""
 
+    supports_tests = True
+    supports_serve = False
+
     def __init__(self, config: BuildConfig, log_manager: Optional[LogManager] = None):
         super().__init__(config, log_manager)
-        self._env: Optional[dict[str, str]] = None
+
+        native_config = config.platform_config
+        assert isinstance(native_config, NativeConfig)
+        self._native_config = native_config
+
+        self._env: dict[str, str] = dict(os.environ)
 
         # Load environment variables from .env file if available
-        if config.native_config and config.native_config.env_vars:
-            self._env = dict(os.environ)
-            self._env.update(config.native_config.env_vars)
+        if native_config.env_vars:
+            self._env.update(native_config.env_vars)
 
             # Add Qt IFW bin directory to PATH if configured
-            if "QT_IFW_ROOT" in config.native_config.env_vars:
-                qt_ifw_bin = Path(config.native_config.env_vars["QT_IFW_ROOT"]) / "bin"
+            if "QT_IFW_ROOT" in native_config.env_vars:
+                qt_ifw_bin = Path(native_config.env_vars["QT_IFW_ROOT"]) / "bin"
                 if qt_ifw_bin.exists():
                     self._env["PATH"] = str(qt_ifw_bin) + os.pathsep + self._env.get("PATH", "")
+
+        # Activate platform toolchain (vcvars on Windows, passthrough on Linux)
+        self._platform = create_platform_env(
+            env_overrides=native_config.env_vars,
+        )
+        self._env = self._platform.activate(base_env=self._env)
 
     def _get_command_env(self) -> Optional[dict[str, str]]:
         """Get environment variables for command execution"""
         return self._env
 
     def _prepare_command(self, cmd: str) -> str:
-        """Wrap command with vcvars64 on Windows"""
-        if (
-            self.config.is_windows
-            and self.config.native_config
-            and self.config.native_config.vcvars_path
-        ):
-            vcvars = self.config.native_config.vcvars_path
-            return f'cmd /c ""{vcvars}" && {cmd}"'
+        """No-op: vcvars env is now passed via env= parameter"""
         return cmd
 
     def configure(self) -> bool:
         """Run conan install + cmake configure"""
-        arch = self.config.native_config.arch if self.config.native_config else "x86_64"
+        arch = self._native_config.arch
 
         # Install dependencies with Conan
         # Use project-specific profile if it exists
@@ -84,28 +91,27 @@ class NativeRunner(BaseRunner):
 
     def show_setup_info(self) -> None:
         """Show native build setup information"""
-        if self.config.native_config:
-            if self.config.is_windows:
-                if self.config.native_config.vcvars_path:
-                    if self.config.verbose:
-                        console.print(
-                            f"[green]Found vcvars64:[/green] [dim]{self.config.native_config.vcvars_path}[/dim]"
-                        )
-                else:
+        if IS_WINDOWS:
+            if self._platform.toolchain_path:
+                if self.config.verbose:
                     console.print(
-                        "[yellow]Warning: Visual Studio vcvars64.bat not found. Build may fail.[/yellow]"
+                        f"[green]Found vcvars64:[/green] [dim]{self._platform.toolchain_path}[/dim]"
                     )
-                    console.print(
-                        "[dim]Please install Visual Studio 2019 or 2022 with C++ tools.[/dim]"
-                    )
-
-            if self.config.verbose:
+            else:
                 console.print(
-                    f"[green]Detected architecture:[/green] [dim]{self.config.native_config.arch}[/dim]"
+                    "[yellow]Warning: Visual Studio vcvars64.bat not found. Build may fail.[/yellow]"
+                )
+                console.print(
+                    "[dim]Please install Visual Studio 2019 or 2022 with C++ tools.[/dim]"
                 )
 
-                # Show loaded environment variables from .env
-                if self.config.native_config.env_vars:
-                    console.print("[green]Loaded from .env:[/green]")
-                    for key, value in self.config.native_config.env_vars.items():
-                        console.print(f"  [dim]{key}={value}[/dim]")
+        if self.config.verbose:
+            console.print(
+                f"[green]Detected architecture:[/green] [dim]{self._native_config.arch}[/dim]"
+            )
+
+            # Show loaded environment variables from .env
+            if self._native_config.env_vars:
+                console.print("[green]Loaded from .env:[/green]")
+                for key, value in self._native_config.env_vars.items():
+                    console.print(f"  [dim]{key}={value}[/dim]")

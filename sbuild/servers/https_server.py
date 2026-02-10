@@ -5,38 +5,14 @@ Generates a self-signed certificate on first run for testing features
 that require secure context (like Clipboard API).
 """
 
-import http.server
-import os
 import platform
-import signal
 import ssl
 import subprocess
-import sys
 from pathlib import Path
 from typing import Optional
 
 from ..console import console
-
-# Flag to signal shutdown
-_shutdown_requested = False
-
-
-class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
-    """HTTP handler that adds COOP/COEP headers for SharedArrayBuffer support.
-
-    Required for multi-threaded WebAssembly (Qt wasm_multithread).
-    See: https://web.dev/coop-coep/
-    """
-
-    def end_headers(self):
-        # Required for SharedArrayBuffer (multi-threaded WASM)
-        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
-        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
-        super().end_headers()
-
-    def log_message(self, format, *args):
-        # Suppress default logging (use rich console instead)
-        pass
+from ._common import serve_common
 
 
 def _generate_self_signed_cert(
@@ -95,57 +71,21 @@ def serve_https(
     openssl_path: Optional[Path] = None,
 ) -> None:
     """Start an HTTPS server for WASM testing with secure context"""
-    global _shutdown_requested
-    _shutdown_requested = False
-
-    original_dir = os.getcwd()
-
     cert_file = build_dir / "server.pem"
     key_file = build_dir / "server.key"
 
-    def signal_handler(signum, frame):
-        global _shutdown_requested
-        _shutdown_requested = True
-        console.print("\n[yellow]Shutting down...[/yellow]")
+    if not _generate_self_signed_cert(cert_file, key_file, openssl_path):
+        return
 
-    # Register signal handler for graceful shutdown on Windows
-    signal.signal(signal.SIGINT, signal_handler)
-    if sys.platform != "win32":
-        signal.signal(signal.SIGTERM, signal_handler)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(str(cert_file), str(key_file))
 
-    try:
-        os.chdir(build_dir)
-
-        if not _generate_self_signed_cert(cert_file, key_file, openssl_path):
-            return
-
-        console.print(f"[cyan]Serving WASM build from:[/cyan] {build_dir}")
-        console.print(
-            f"[green]HTTPS server running on:[/green] https://{bind}:{port}/"
-        )
-        console.print("[dim]COOP/COEP headers enabled for SharedArrayBuffer[/dim]")
-        console.print(
-            "[yellow]NOTE: Browser will show certificate warning - accept it to continue[/yellow]"
-        )
-        console.print("[dim]Press Ctrl+C to stop[/dim]\n")
-
-        server_address = (bind, port)
-        httpd = http.server.HTTPServer(server_address, COOPCOEPHandler)
-        httpd.timeout = 0.5  # Short timeout to check for shutdown
-
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(str(cert_file), str(key_file))
-        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-
-        # Use polling loop instead of serve_forever for better Ctrl+C handling
-        while not _shutdown_requested:
-            httpd.handle_request()
-
-        console.print("[yellow]Server stopped.[/yellow]")
-
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Server stopped.[/yellow]")
-    except Exception as e:
-        console.print(f"[red]Server error: {e}[/red]")
-    finally:
-        os.chdir(original_dir)
+    serve_common(
+        build_dir,
+        port,
+        bind,
+        ssl_context=context,
+        extra_messages=[
+            "[yellow]NOTE: Browser will show certificate warning - accept it to continue[/yellow]",
+        ],
+    )

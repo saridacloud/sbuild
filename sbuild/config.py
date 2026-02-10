@@ -6,9 +6,10 @@ Provides dataclasses for build configuration with environment detection.
 
 import os
 import platform
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .exceptions import ConfigError, EnvironmentSetupError
 
@@ -48,11 +49,55 @@ def parse_cmake_project_info(cmake_file: Path) -> tuple[str, str]:
     return name, version
 
 
+
+class PlatformConfig(ABC):
+    """Abstract base for platform-specific build configuration."""
+
+    @abstractmethod
+    def build_dir_name(self, build_type: str) -> str:
+        """Return the build directory name for the given build type."""
+        ...
+
+    @abstractmethod
+    def preset_name(self, build_type: str) -> str:
+        """Return the CMake preset name for the given build type."""
+        ...
+
+    @abstractmethod
+    def get_environment(self) -> dict[str, str]:
+        """Return environment variables dict for subprocess."""
+        ...
+
+    @abstractmethod
+    def validate(self) -> None:
+        """Validate configuration. Raise on errors."""
+        ...
+
+    @property
+    def display_name(self) -> str:
+        """Human-readable platform label (empty for native)."""
+        return ""
+
+
+
+_ARCH_MAPPING = {
+    "amd64": "x86_64",
+    "x86_64": "x86_64",
+    "i386": "x86",
+    "i686": "x86",
+    "arm64": "armv8",
+    "aarch64": "armv8",
+    "armv8": "armv8",
+    "armv7l": "armv7",
+    "armv7": "armv7",
+    "armv6l": "armv6",
+    "armv6": "armv6",
+}
+
 @dataclass
-class NativeConfig:
+class NativeConfig(PlatformConfig):
     """Configuration for native (conan + cmake) builds"""
 
-    vcvars_path: Optional[Path] = None
     arch: str = "x86_64"
     env_vars: dict[str, str] = field(default_factory=dict)
 
@@ -60,74 +105,40 @@ class NativeConfig:
     def detect(cls, project_root: Optional[Path] = None) -> "NativeConfig":
         """Auto-detect native build configuration"""
         config = cls()
-        config.arch = cls._detect_architecture()
+        config.arch = cls.detect_architecture()
 
-        # Load optional .env file for additional environment variables
         if project_root:
             env_file = project_root / ".env"
             config.env_vars = load_env_file(env_file)
 
-        if platform.system() == "Windows":
-            # Check .env and OS environment for explicit VCVARS_PATH
-            vcvars_override = config.env_vars.get("VCVARS_PATH") or os.environ.get("VCVARS_PATH")
-            if vcvars_override:
-                path = Path(vcvars_override)
-                if path.exists():
-                    config.vcvars_path = path
-                else:
-                    raise ConfigError(f"VCVARS_PATH not found: {vcvars_override}")
-            else:
-                config.vcvars_path = cls._find_vcvars()
-
         return config
 
     @staticmethod
-    def _detect_architecture() -> str:
+    def detect_architecture() -> str:
         """Detect system architecture and return Conan architecture string"""
         machine = platform.machine().lower()
+        return _ARCH_MAPPING.get(machine, machine)
 
-        arch_mapping = {
-            "amd64": "x86_64",
-            "x86_64": "x86_64",
-            "i386": "x86",
-            "i686": "x86",
-            "arm64": "armv8",
-            "aarch64": "armv8",
-            "armv8": "armv8",
-            "armv7l": "armv7",
-            "armv7": "armv7",
-            "armv6l": "armv6",
-            "armv6": "armv6",
-        }
+    def build_dir_name(self, build_type: str) -> str:
+        return build_type
 
-        return arch_mapping.get(machine, machine)
+    def preset_name(self, build_type: str) -> str:
+        return f"conan-{build_type.lower()}"
 
-    @staticmethod
-    def _find_vcvars() -> Optional[Path]:
-        """Find vcvars64.bat path on Windows"""
-        possible_paths = [
-            "C:/Program Files/Microsoft Visual Studio/2022/Professional/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Professional/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
-            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Auxiliary/Build/vcvars64.bat",
-        ]
+    def get_environment(self) -> dict[str, str]:
+        return dict(self.env_vars)
 
-        for path_str in possible_paths:
-            path = Path(path_str)
-            if path.exists():
-                return path
-        return None
+    def validate(self) -> None:
+        pass  # Native config is always valid
 
 
 @dataclass
-class WasmConfig:
+class WasmConfig(PlatformConfig):
     """Configuration for WebAssembly builds"""
 
-    emsdk_path: Path
-    qt_wasm_path: Path
-    qt_host_path: Path
+    emsdk_path: Path = field(default_factory=lambda: Path())
+    qt_wasm_path: Path = field(default_factory=lambda: Path())
+    qt_host_path: Path = field(default_factory=lambda: Path())
     openssl_path: Optional[Path] = None
 
     @classmethod
@@ -191,6 +202,22 @@ class WasmConfig:
             env["OPENSSL"] = str(self.openssl_path)
         return env
 
+    def build_dir_name(self, build_type: str) -> str:
+        return f"wasm-{build_type.lower()}"
+
+    def preset_name(self, build_type: str) -> str:
+        return f"wasm-{build_type.lower()}"
+
+    @property
+    def display_name(self) -> str:
+        return "WASM"
+
+
+_CONFIG_FACTORIES: dict[str, Callable[[Path], PlatformConfig]] = {
+    "native": lambda root: NativeConfig.detect(root),
+    "wasm": lambda root: WasmConfig.from_env_file(root / ".env.wasm"),
+}
+
 
 @dataclass
 class BuildConfig:
@@ -204,33 +231,32 @@ class BuildConfig:
     cmake_args: Optional[str] = None
     build_number: Optional[int] = None  # Override git commit count for packaging
 
-    # Platform-specific configs (set during initialization)
-    native_config: Optional[NativeConfig] = field(default=None, init=False)
-    wasm_config: Optional[WasmConfig] = field(default=None, init=False)
+    # Set during initialization
+    platform_config: Optional[PlatformConfig] = field(default=None, init=False)
+    _cmake_info: tuple[str, str] = field(default=("unknown", "0.0.0"), init=False, repr=False)
 
     def __post_init__(self):
         """Initialize platform-specific configuration"""
         self.build_type = self.build_type.capitalize()
 
-        if self.platform == "native":
-            self.native_config = NativeConfig.detect(self.project_root)
-        elif self.platform == "wasm":
-            env_file = self.project_root / ".env.wasm"
-            self.wasm_config = WasmConfig.from_env_file(env_file)
+        factory = _CONFIG_FACTORIES.get(self.platform)
+        if factory is None:
+            raise ConfigError(f"Unknown platform: {self.platform}")
+        self.platform_config = factory(self.project_root)
+        self.platform_config.validate()
+
+        # Cache CMakeLists.txt parsing (avoids re-parsing on every property access)
+        self._cmake_info = parse_cmake_project_info(self.project_root / "CMakeLists.txt")
 
     @property
     def build_dir(self) -> Path:
         """Return appropriate build directory"""
-        if self.platform == "wasm":
-            return self.project_root / "build" / f"wasm-{self.build_type.lower()}"
-        return self.project_root / "build" / self.build_type
+        return self.project_root / "build" / self.platform_config.build_dir_name(self.build_type)
 
     @property
     def preset_name(self) -> str:
         """Return CMake preset name"""
-        if self.platform == "wasm":
-            return f"wasm-{self.build_type.lower()}"
-        return f"conan-{self.build_type.lower()}"
+        return self.platform_config.preset_name(self.build_type)
 
     @property
     def is_windows(self) -> bool:
@@ -240,14 +266,12 @@ class BuildConfig:
     @property
     def project_name(self) -> str:
         """Return project name from CMakeLists.txt"""
-        name, _ = parse_cmake_project_info(self.project_root / "CMakeLists.txt")
-        return name
+        return self._cmake_info[0]
 
     @property
     def version(self) -> str:
         """Return project version from CMakeLists.txt"""
-        _, version = parse_cmake_project_info(self.project_root / "CMakeLists.txt")
-        return version
+        return self._cmake_info[1]
 
     def get_resolved_build_number(self) -> int:
         """Return resolved build number from generated version.h or CLI override"""

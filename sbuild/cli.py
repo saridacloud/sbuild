@@ -17,7 +17,6 @@ Usage:
 """
 
 import os
-import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -26,6 +25,7 @@ import typer
 from .session import BuildSession
 from .exceptions import BuildError, ConfigError
 from .console import console
+from . import __version__
 
 DEFAULT_JOBS = os.cpu_count() or 4
 
@@ -52,33 +52,50 @@ def _get_build_types(all_configs: bool, release: bool) -> list[str]:
     return ["release" if release else "debug"]
 
 
-def _do_rebuild(
+def _do_build(
     platform: str,
     build_type: str,
-    verbose: bool,
     jobs: int,
-    cmake_args: Optional[str],
+    verbose: bool,
     build_number: Optional[int],
+    cmake_args: Optional[str],
+    clean_first: bool = False,
+    always_configure: bool = False,
 ):
-    """Execute rebuild action for a single build type."""
+    """Execute build action.
+
+    Args:
+        clean_first: Always clean before building
+        always_configure: Always run configure step (not just when build dir is missing)
+    """
     with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number) as session:
-        session.show_header("rebuild")
+        action = "rebuild" if (clean_first and always_configure) else "build"
+        session.show_header(action)
 
-        if not session.runner.clean():
-            session.show_failure("clean")
-            session.exit_with_error()
+        if clean_first:
+            if not session.runner.clean():
+                session.show_failure("clean")
+                session.exit_with_error()
+            if action == "rebuild":
+                session.console.print()
 
-        session.console.print()
-
-        if not session.runner.configure():
-            session.show_failure("configure")
-            session.exit_with_error()
+        # Configure if forced or if build dir doesn't exist yet
+        if always_configure or not session.config.build_dir.exists():
+            if not session.runner.configure():
+                session.show_failure("configure")
+                session.exit_with_error()
 
         if not session.runner.build():
             session.show_failure("build")
             session.exit_with_error()
 
-        session.show_success("rebuild")
+        session.show_success(action)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        print(f"sbuild {__version__}")
+        raise typer.Exit()
 
 
 @app.callback(invoke_without_command=True)
@@ -91,12 +108,14 @@ def main(
     verbose: VerboseOpt = False,
     build_number: Annotated[Optional[int], typer.Option("--build-number", "-b", help="Override build number")] = None,
     cmake_args: Annotated[Optional[str], typer.Option("--cmake-args", help="Additional CMake arguments")] = None,
+    version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit",
+                                          callback=_version_callback, is_eager=True)] = False,
 ):
     """Default action: incremental build."""
     if ctx.invoked_subcommand is None:
         # Default to build command
         build_type = "release" if release else "debug"
-        _do_build(platform, build_type, clean, jobs, verbose, build_number, cmake_args)
+        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=clean)
 
 
 @app.command()
@@ -124,7 +143,7 @@ def build(
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
-        _do_build(platform, build_type, clean, jobs, verbose, build_number, cmake_args)
+        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=clean)
 
 
 @app.command()
@@ -148,7 +167,8 @@ def rebuild(
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
-        _do_rebuild(platform, build_type, verbose, jobs, cmake_args, build_number)
+        _do_build(platform, build_type, jobs, verbose, build_number,
+                  cmake_args, clean_first=True, always_configure=True)
 
 
 @app.command()
@@ -237,7 +257,8 @@ def package(
     release: ReleaseOpt = False,
     all_configs: AllConfigsOpt = False,
     platform: PlatformOpt = "native",
-    generator: Annotated[Optional[str], typer.Option("--generator", "-G", help="CPack generator (ZIP, NSIS, IFW)")] = None,
+    generator: Annotated[Optional[str], typer.Option(
+        "--generator", "-G", help="CPack generator (ZIP, NSIS, IFW)")] = None,
     fresh: Annotated[bool, typer.Option("--fresh", help="Clean rebuild before packaging")] = False,
     jobs: JobsOpt = DEFAULT_JOBS,
     verbose: VerboseOpt = False,
@@ -259,7 +280,7 @@ def package(
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
         if fresh:
-            _do_rebuild(platform, build_type, verbose, jobs, None, None)
+            _do_build(platform, build_type, jobs, verbose, None, None, clean_first=True, always_configure=True)
 
         with BuildSession(platform, build_type) as session:
             if session.runner.package(generator):
@@ -287,29 +308,40 @@ def serve(
       [cyan]sbuild serve -p wasm --https[/cyan]     HTTPS server on port 8443
       [cyan]sbuild serve -p wasm --port 9000[/cyan] Custom port
     """
-    if platform != "wasm":
-        console.print("[red]Error: 'serve' command is only available for --platform wasm[/red]")
-        console.print("[dim]Usage: sbuild serve --platform wasm[/dim]")
-        raise typer.Exit(1)
-
     build_type = "release" if release else "debug"
-    project_root = Path.cwd()
 
     try:
-        from .config import BuildConfig
-        from .runners import WasmRunner
+        with BuildSession(platform, build_type) as session:
+            if not session.runner.supports_serve:
+                console.print("[red]Error: 'serve' command is not supported for this platform[/red]")
+                console.print("[dim]Usage: sbuild serve --platform wasm[/dim]")
+                raise typer.Exit(1)
 
-        config = BuildConfig(
-            project_root=project_root,
-            build_type=build_type,
-            platform="wasm",
-        )
-
-        runner = WasmRunner(config)
-        runner.serve(https=https, port=port)
+            session.runner.serve(https=https, port=port)
 
     except (BuildError, ConfigError) as e:
         console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def doctor(
+    verbose: VerboseOpt = False,
+):
+    """
+    Check environment health and diagnose setup issues.
+
+    [bold]Examples:[/bold]
+
+      [cyan]sbuild doctor[/cyan]                    Run all checks
+      [cyan]sbuild doctor -v[/cyan]                 Show tool paths
+    """
+    from .doctor import DoctorReport
+
+    report = DoctorReport(Path.cwd(), verbose)
+    passed = report.check_all()
+    report.display()
+    if not passed:
         raise typer.Exit(1)
 
 
@@ -320,7 +352,8 @@ def test(
     filter: Annotated[Optional[str], typer.Option("-R", "--filter", help="Run tests matching regex pattern")] = None,
     test_verbose: Annotated[bool, typer.Option("--test-verbose", help="Verbose CTest output")] = False,
     rerun_failed: Annotated[bool, typer.Option("--rerun-failed", help="Re-run only failed tests")] = False,
-    output_on_failure: Annotated[bool, typer.Option("--output-on-failure/--no-output-on-failure", help="Show output on failure")] = True,
+    output_on_failure: Annotated[bool, typer.Option(
+        "--output-on-failure/--no-output-on-failure", help="Show output on failure")] = True,
     jobs: JobsOpt = DEFAULT_JOBS,
     verbose: VerboseOpt = False,
 ):
@@ -332,17 +365,17 @@ def test(
       [cyan]sbuild test[/cyan]                     Run all tests (debug)
       [cyan]sbuild test --release[/cyan]           Run tests for release build
       [cyan]sbuild test --filter Entity[/cyan]     Run tests matching 'Entity'
-      [cyan]sbuild test --filter "Drone.*"[/cyan]  Run tests matching pattern
+      [cyan]sbuild test --filter "App.*"[/cyan]  Run tests matching pattern
       [cyan]sbuild test --rerun-failed[/cyan]      Re-run only failed tests
       [cyan]sbuild test --test-verbose[/cyan]      Show full CTest output
     """
-    if platform == "wasm":
-        console.print("[red]Error: Tests are not supported for WebAssembly builds[/red]")
-        raise typer.Exit(1)
-
     build_type = "release" if release else "debug"
 
     with BuildSession(platform, build_type, verbose, jobs) as session:
+        if not session.runner.supports_tests:
+            console.print("[red]Error: Tests are not supported for this platform[/red]")
+            raise typer.Exit(1)
+
         success = session.runner.run_tests(
             test_filter=filter,
             test_verbose=test_verbose,
@@ -352,38 +385,6 @@ def test(
 
         if not success:
             session.exit_with_error()
-
-
-def _do_build(
-    platform: str,
-    build_type: str,
-    clean: bool,
-    jobs: int,
-    verbose: bool,
-    build_number: Optional[int],
-    cmake_args: Optional[str],
-):
-    """Execute build action."""
-    with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number) as session:
-        session.show_header("build")
-
-        if clean:
-            if not session.runner.clean():
-                session.show_failure("clean")
-                session.exit_with_error()
-
-        # Check if build directory exists for incremental build
-        if not session.config.build_dir.exists():
-            # First time build - need to configure
-            if not session.runner.configure():
-                session.show_failure("configure")
-                session.exit_with_error()
-
-        if not session.runner.build():
-            session.show_failure("build")
-            session.exit_with_error()
-
-        session.show_success("build")
 
 
 if __name__ == "__main__":
