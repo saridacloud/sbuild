@@ -25,6 +25,7 @@ import typer
 from .session import BuildSession
 from .exceptions import BuildError, ConfigError
 from .console import console
+from . import __version__
 
 DEFAULT_JOBS = os.cpu_count() or 4
 
@@ -91,6 +92,12 @@ def _do_build(
         session.show_success(action)
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        print(f"sbuild {__version__}")
+        raise typer.Exit()
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -101,6 +108,8 @@ def main(
     verbose: VerboseOpt = False,
     build_number: Annotated[Optional[int], typer.Option("--build-number", "-b", help="Override build number")] = None,
     cmake_args: Annotated[Optional[str], typer.Option("--cmake-args", help="Additional CMake arguments")] = None,
+    version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit",
+                                          callback=_version_callback, is_eager=True)] = False,
 ):
     """Default action: incremental build."""
     if ctx.invoked_subcommand is None:
