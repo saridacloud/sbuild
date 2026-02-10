@@ -400,6 +400,37 @@ class DoctorReport:
 
         return results
 
+    def _check_nsis(self) -> CheckResult:
+        """Check for NSIS (makensis), falling back to registry and known paths."""
+        r = _check_tool_version(
+            "makensis", ["/VERSION"], required=False,
+            fix_hint="Install NSIS: https://nsis.sourceforge.io/Download",
+            vcvars_env=self._vcvars_env,
+        )
+        if r.status == CheckStatus.OK:
+            return r
+
+        # PATH lookup failed – try registry and known install directories
+        nsis_path = _find_nsis()
+        if nsis_path is None:
+            return r  # original WARN result
+
+        # Found makensis outside PATH – get its version
+        try:
+            result = subprocess.run(
+                [str(nsis_path), "/VERSION"],
+                capture_output=True, text=True, timeout=5,
+            )
+            version = _parse_version(result.stdout + result.stderr)
+        except (OSError, subprocess.TimeoutExpired):
+            version = None
+
+        label = f"{version} ({nsis_path.parent})" if version else str(nsis_path.parent)
+        return CheckResult(
+            "makensis", CheckStatus.OK,
+            version=label, path=nsis_path,
+        )
+
     def _check_packaging_tools(self) -> list[CheckResult]:
         results: list[CheckResult] = []
 
@@ -437,11 +468,7 @@ class DoctorReport:
 
         # NSIS (Windows only)
         if self._is_windows:
-            results.append(_check_tool_version(
-                "makensis", ["/VERSION"], required=False,
-                fix_hint="Install NSIS: https://nsis.sourceforge.io/Download",
-                vcvars_env=self._vcvars_env,
-            ))
+            results.append(self._check_nsis())
 
         return results
 
@@ -538,6 +565,34 @@ def _check_tool_version(
             message="Timed out",
             fix_hint=fix_hint,
         )
+
+
+def _find_nsis() -> Path | None:
+    """Locate makensis.exe via Windows registry and known install directories."""
+    # 1. Check Windows registry
+    if IS_WINDOWS:
+        import winreg
+
+        for key_path in (r"SOFTWARE\NSIS", r"SOFTWARE\WOW6432Node\NSIS"):
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                    install_dir, _ = winreg.QueryValueEx(key, "")
+                    candidate = Path(install_dir) / "makensis.exe"
+                    if candidate.is_file():
+                        return candidate
+            except OSError:
+                continue
+
+    # 2. Check common install directories
+    for directory in (
+        Path(r"C:\Program Files\NSIS"),
+        Path(r"C:\Program Files (x86)\NSIS"),
+    ):
+        candidate = directory / "makensis.exe"
+        if candidate.is_file():
+            return candidate
+
+    return None
 
 
 def _which(tool: str) -> Path | None:

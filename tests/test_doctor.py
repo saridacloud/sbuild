@@ -12,6 +12,7 @@ from sbuild.doctor import (
     DoctorReport,
     _check_path,
     _collect_preset_names,
+    _find_nsis,
     _parse_version,
     _status_markup,
 )
@@ -222,3 +223,121 @@ class TestCheckCmakePresets:
 
         conan_debug = [r for r in results if r.name == "Preset 'conan-debug'"]
         assert conan_debug[0].status == CheckStatus.OK
+
+
+# -- _find_nsis ---------------------------------------------------------------
+
+class TestFindNsis:
+    """Tests for the _find_nsis registry + filesystem lookup."""
+
+    def test_found_via_registry(self, tmp_path):
+        """Registry key exists and points to a valid makensis.exe."""
+        import types
+
+        nsis_dir = tmp_path / "NSIS"
+        nsis_dir.mkdir()
+        makensis = nsis_dir / "makensis.exe"
+        makensis.write_text("fake")
+
+        class FakeKey:
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+
+        def open_key(_hive, key_path):
+            if key_path == r"SOFTWARE\NSIS":
+                return FakeKey()
+            raise OSError("not found")
+
+        mock_winreg = types.ModuleType("winreg")
+        mock_winreg.HKEY_LOCAL_MACHINE = 0x80000002
+        mock_winreg.OpenKey = open_key
+        mock_winreg.QueryValueEx = lambda _key, _name: (str(nsis_dir), 1)
+
+        with (
+            patch("sbuild.doctor.IS_WINDOWS", True),
+            patch.dict("sys.modules", {"winreg": mock_winreg}),
+        ):
+            result = _find_nsis()
+
+        assert result == makensis
+
+    def test_found_via_known_path(self):
+        """makensis.exe found in a known install directory."""
+        expected = Path(r"C:\Program Files\NSIS") / "makensis.exe"
+        with (
+            patch("sbuild.doctor.IS_WINDOWS", False),
+            patch("pathlib.Path.is_file", return_value=True),
+        ):
+            result = _find_nsis()
+        assert result == expected
+
+    def test_not_found_anywhere(self):
+        """Neither registry nor filesystem has makensis."""
+        with (
+            patch("sbuild.doctor.IS_WINDOWS", False),
+            patch("pathlib.Path.is_file", return_value=False),
+        ):
+            result = _find_nsis()
+        assert result is None
+
+
+# -- _check_nsis (via DoctorReport) -------------------------------------------
+
+class TestCheckNsis:
+    """Tests for DoctorReport._check_nsis fallback logic."""
+
+    def test_ok_when_found_on_path(self):
+        """makensis on PATH → OK without fallback."""
+        report = _make_report(Path("."))
+        report._vcvars_env = None
+
+        ok_result = CheckResult("makensis", CheckStatus.OK, version="3.09")
+        with patch("sbuild.doctor._check_tool_version", return_value=ok_result):
+            result = report._check_nsis()
+
+        assert result.status == CheckStatus.OK
+        assert result.version == "3.09"
+
+    def test_ok_via_registry_fallback(self, tmp_path):
+        """makensis not on PATH but found via _find_nsis → OK."""
+        report = _make_report(Path("."))
+        report._vcvars_env = None
+
+        warn_result = CheckResult(
+            "makensis", CheckStatus.WARN, message="Not found",
+            fix_hint="Install NSIS: https://nsis.sourceforge.io/Download",
+        )
+        nsis_exe = tmp_path / "NSIS" / "makensis.exe"
+        nsis_exe.parent.mkdir()
+        nsis_exe.write_text("fake")
+
+        fake_run_result = type("R", (), {"stdout": "v3.09", "stderr": ""})()
+
+        with (
+            patch("sbuild.doctor._check_tool_version", return_value=warn_result),
+            patch("sbuild.doctor._find_nsis", return_value=nsis_exe),
+            patch("subprocess.run", return_value=fake_run_result),
+        ):
+            result = report._check_nsis()
+
+        assert result.status == CheckStatus.OK
+        assert "3.09" in result.version
+        assert result.path == nsis_exe
+
+    def test_warn_when_not_found_at_all(self):
+        """makensis not on PATH and _find_nsis returns None → WARN."""
+        report = _make_report(Path("."))
+        report._vcvars_env = None
+
+        warn_result = CheckResult(
+            "makensis", CheckStatus.WARN, message="Not found",
+            fix_hint="Install NSIS: https://nsis.sourceforge.io/Download",
+        )
+        with (
+            patch("sbuild.doctor._check_tool_version", return_value=warn_result),
+            patch("sbuild.doctor._find_nsis", return_value=None),
+        ):
+            result = report._check_nsis()
+
+        assert result.status == CheckStatus.WARN
+        assert result.message == "Not found"
