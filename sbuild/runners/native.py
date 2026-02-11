@@ -1,7 +1,7 @@
 """
 sbuild - Native runner
 
-Build runner for native (conan + cmake) builds with vcvars64 support on Windows.
+Build runner for native (conan + cmake) builds with vcvarsall.bat support on Windows.
 """
 
 import os
@@ -40,9 +40,10 @@ class NativeRunner(BaseRunner):
                 if qt_ifw_bin.exists():
                     self._env["PATH"] = str(qt_ifw_bin) + os.pathsep + self._env.get("PATH", "")
 
-        # Activate platform toolchain (vcvars on Windows, passthrough on Linux)
+        # Activate platform toolchain (vcvarsall on Windows, passthrough on Linux)
         self._platform = create_platform_env(
             env_overrides=native_config.env_vars,
+            target_arch=native_config.target_arch,
         )
         self._env = self._platform.activate(base_env=self._env)
 
@@ -95,11 +96,14 @@ class NativeRunner(BaseRunner):
             if self._platform.toolchain_path:
                 if self.config.verbose:
                     console.print(
-                        f"[green]Found vcvars64:[/green] [dim]{self._platform.toolchain_path}[/dim]"
+                        f"[green]Found vcvarsall:[/green] [dim]{self._platform.toolchain_path}[/dim]"
+                    )
+                    console.print(
+                        f"[green]vcvars arch:[/green] [dim]{self._platform.vcvars_arch}[/dim]"
                     )
             else:
                 console.print(
-                    "[yellow]Warning: Visual Studio vcvars64.bat not found. Build may fail.[/yellow]"
+                    "[yellow]Warning: Visual Studio vcvarsall.bat not found. Build may fail.[/yellow]"
                 )
                 console.print(
                     "[dim]Please install Visual Studio 2019 or 2022 with C++ tools.[/dim]"
