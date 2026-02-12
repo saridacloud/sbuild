@@ -22,6 +22,7 @@ class LinuxEnv(PlatformEnv):
         *,
         extra_scripts: list[Path] | None = None,
         base_env: dict[str, str] | None = None,
+        cache_dir: Path | None = None,
     ) -> dict[str, str]:
         env = dict(base_env) if base_env is not None else dict(os.environ)
 

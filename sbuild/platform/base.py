@@ -22,10 +22,12 @@ class PlatformEnv(ABC):
         *,
         extra_scripts: list[Path] | None = None,
         base_env: dict[str, str] | None = None,
+        cache_dir: Path | None = None,
     ) -> dict[str, str]:
         """Activate platform toolchain + optional extra scripts, return captured env dict.
 
         If no toolchain and no extra_scripts, returns base_env (or os.environ copy).
+        cache_dir: project root for caching toolchain env (only used on Windows).
         """
 
     @staticmethod

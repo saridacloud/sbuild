@@ -14,6 +14,7 @@ Unified build system for Conan 2 + CMake projects with native and WebAssembly su
 - [Commands](#commands)
 - [Configuration](#configuration)
 - [Project Setup](#project-setup)
+- [Environment Caching (Windows)](#environment-caching-windows)
 - [Troubleshooting](#troubleshooting)
 - [License](#license)
 
@@ -383,6 +384,30 @@ The CMake generator can be configured per-profile via Conan's `[conf]` section (
 ### Editor Integration
 
 Pre-configured VS Code tasks are available in [`editors/vscode/tasks.json`](editors/vscode/tasks.json). Copy to your project's `.vscode/` directory and use **Ctrl+Shift+B** for build tasks.
+
+## Environment Caching (Windows)
+
+On Windows, sbuild caches the environment captured from `vcvarsall.bat` to avoid re-running it on every command (~3-5 seconds saved per invocation).
+
+**Location:** `.sbuild/vcvars_cache.pkl` in the project root
+
+**Auto-invalidation:** The cache is automatically invalidated when:
+- `vcvarsall.bat` is modified (file timestamp change)
+- The target architecture changes (e.g. switching between `x64` and `arm64`)
+
+**Manual invalidation:** Delete the cache directory:
+```bash
+# Windows (cmd)
+rmdir /s /q .sbuild
+
+# PowerShell / Linux
+rm -rf .sbuild
+```
+
+**Notes:**
+- Caching is only used for native builds without extra scripts
+- Cache failures never break builds — sbuild falls back to running `vcvarsall.bat`
+- Use `-v` (verbose) to see whether the cache was hit or missed
 
 ## Troubleshooting
 
