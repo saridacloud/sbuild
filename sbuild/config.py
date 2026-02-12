@@ -306,7 +306,7 @@ class NativeConfig(PlatformConfig):
         return dict(self.env_vars)
 
     def validate(self) -> None:
-        pass  # Native config is always valid  # Native config is always valid
+        pass  # Native config is always valid
 
 
 @dataclass

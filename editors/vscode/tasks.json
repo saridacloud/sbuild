@@ -174,9 +174,9 @@
         {
             "label": "Build...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild build ${input:configDRA} ${input:platform} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
             },
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -188,9 +188,9 @@
         {
             "label": "Rebuild...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild rebuild ${input:configDRA} ${input:platform} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
             },
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -202,9 +202,9 @@
         {
             "label": "Clean...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild clean ${input:configDR} ${input:platform}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild clean ${input:configDR} ${input:platform} ${input:arch}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe clean ${input:configDR} ${input:platform}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe clean ${input:configDR} ${input:platform} ${input:arch}"
             },
             "group": "build",
             "problemMatcher": [],
@@ -216,9 +216,9 @@
         {
             "label": "Configure...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild configure ${input:configDR} ${input:platform} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}"
             },
             "group": "build",
             "problemMatcher": [],
@@ -230,9 +230,9 @@
         {
             "label": "Install...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild install ${input:configDR} ${input:platform} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe install ${input:configDR} ${input:platform} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}"
             },
             "group": "build",
             "problemMatcher": [],
@@ -244,9 +244,9 @@
         {
             "label": "Test...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
             },
             "group": "test",
             "problemMatcher": [],
@@ -258,9 +258,9 @@
         {
             "label": "Test: Filter...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
             },
             "group": "test",
             "problemMatcher": [],
@@ -272,9 +272,9 @@
         {
             "label": "Package...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild package ${input:configDRA} ${input:platform} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe package ${input:configDRA} ${input:platform} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}"
             },
             "group": "build",
             "problemMatcher": [],
@@ -342,6 +342,18 @@
             "options": [
                 { "label": "Native",      "value": "" },
                 { "label": "WebAssembly", "value": "--platform wasm" }
+            ],
+            "default": ""
+        },
+        {
+            "id": "arch",
+            "type": "pickString",
+            "description": "Target architecture",
+            "options": [
+                { "label": "Default",  "value": "" },
+                { "label": "x86",      "value": "--arch x86" },
+                { "label": "x64",      "value": "--arch x64" },
+                { "label": "arm64",    "value": "--arch arm64" }
             ],
             "default": ""
         },
