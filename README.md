@@ -87,6 +87,9 @@ sbuild build                            # Debug build (default)
 sbuild build --release                  # Release build
 sbuild build --all                      # Build both debug and release
 sbuild build --clean                    # Clean before building
+sbuild build --arch x86                 # Cross-compile for x86
+sbuild build --arch x64 --release       # x64 release build
+sbuild build --profile my_custom        # Use specific profile
 sbuild rebuild                          # Clean + full rebuild
 sbuild configure                        # Configure only (conan install + cmake)
 sbuild test                             # Run unit tests
@@ -140,6 +143,8 @@ Then use **Ctrl+Shift+B** for build tasks or **Ctrl+Shift+P** → *Tasks: Run Ta
 | `--platform` | `-p` | Build platform: `native` (default) or `wasm` |
 | `--verbose` | `-v` | Show full command output |
 | `--jobs` | `-j` | Parallel jobs (default: CPU count) |
+| `--arch` | `-A` | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | Exact Conan profile name (overrides --arch) |
 | `--build-number` | `-b` | Override build number |
 | `--cmake-args` | | Additional CMake arguments |
 
@@ -151,8 +156,12 @@ sbuild expects a specific layout in the consuming C++ project:
 my-project/
 ├── CMakeLists.txt              # Must contain project(Name VERSION x.y.z)
 ├── profiles/                   # Conan 2 profiles
-│   ├── windows_debug
+│   ├── windows_debug           # Default (no arch qualifier)
 │   ├── windows_release
+│   ├── windows_x64_debug       # Arch-qualified profiles (optional)
+│   ├── windows_x64_release
+│   ├── windows_x86_debug
+│   ├── windows_x86_release
 │   ├── linux_debug
 │   └── linux_release
 ├── .env                        # Native env vars (optional)
@@ -179,6 +188,8 @@ Place Conan 2 profiles in a `profiles/` directory using the naming convention `{
 - `profiles/windows_debug`, `profiles/windows_release`
 - `profiles/linux_debug`, `profiles/linux_release`
 
+Profile naming supports an optional architecture segment: `{os}_{arch}_{build_type}` (e.g. `windows_x64_debug`). Use `sbuild build --arch x64` to select arch-qualified profiles. Without `--arch`, sbuild uses the plain `{os}_{build_type}` profile. Use `--profile custom_name` to bypass all naming conventions and select a profile by exact name.
+
 The CMake generator can be configured per-profile via Conan's `[conf]` section:
 
 ```
@@ -200,9 +211,11 @@ Optional `KEY=VALUE` file for native build environment variables:
 ```
 VCVARS_PATH=C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat
 QT_IFW_ROOT=C:\Qt\Tools\QtInstallerFramework\4.8
+SBUILD_ARCH=x64    # Target architecture (x86, x64, arm64) — overridden by --arch CLI option
 ```
 
 `VCVARS_PATH` overrides auto-detection of the Visual Studio environment script.
+`SBUILD_ARCH` sets the default target architecture for profile selection (CLI `--arch` takes precedence).
 
 ### .env.wasm (WebAssembly builds)
 
@@ -230,7 +243,8 @@ sbuild reads the actual presets file to determine which pattern is in use — no
 
 Build artifacts are written to subdirectories under `build/`:
 
-- `build/Debug`, `build/Release` (native)
+- `build/Debug`, `build/Release` (native, no arch)
+- `build/x64/Debug`, `build/x64/Release` (native, with `--arch x64`)
 - `build/wasm-debug`, `build/wasm-release` (WASM)
 
 Build logs are saved to `build_logs/` with automatic rotation (keeps last 10).
@@ -240,7 +254,7 @@ Build logs are saved to `build_logs/` with automatic rotation (keeps last 10).
 sbuild auto-detects project settings from the working directory:
 
 - **Project name/version**: Parsed from `CMakeLists.txt` (`project(name VERSION x.y.z)`)
-- **Conan profiles**: Looked up in `profiles/` (e.g. `profiles/windows_debug`)
+- **Conan profiles**: Looked up in `profiles/` — uses `{os}_{arch}_{build_type}` when `--arch` is given, `{os}_{build_type}` by default, or exact name with `--profile`
 - **Environment variables**: Loaded from `.env` (native) and `.env.wasm` (WebAssembly)
 - **vcvars64 override**: Set `VCVARS_PATH` in `.env` or as an environment variable to override auto-detection
 - **Build output**: Written to `build/Debug`, `build/Release`, or `build/wasm-debug`

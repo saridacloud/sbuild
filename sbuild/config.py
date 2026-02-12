@@ -165,6 +165,60 @@ _ARCH_MAPPING = {
     "armv6": "armv6",
 }
 
+_FRIENDLY_ARCH_MAP = {
+    "x86": "x86",
+    "x64": "x86_64",
+    "arm64": "armv8",
+}
+
+VALID_ARCH_VALUES = list(_FRIENDLY_ARCH_MAP.keys())
+
+
+def resolve_arch(
+    cli_arch: str | None,
+    env_vars: dict[str, str],
+) -> str | None:
+    """Resolve arch from CLI > .env > system env. Returns friendly name or None."""
+    if cli_arch:
+        return cli_arch
+    env_arch = env_vars.get("SBUILD_ARCH")
+    if env_arch:
+        return env_arch
+    sys_arch = os.environ.get("SBUILD_ARCH")
+    if sys_arch:
+        return sys_arch
+    return None
+
+
+def resolve_profile_path(
+    project_root: Path,
+    build_type: str,
+    arch: str | None = None,
+    profile: str | None = None,
+) -> Path | None:
+    """Resolve the Conan profile path.
+
+    Priority: --profile > --arch > default (os_buildtype).
+    Returns None if no matching profile file exists.
+    """
+    profiles_dir = project_root / "profiles"
+    os_name = "windows" if platform.system() == "Windows" else "linux"
+
+    if profile:
+        path = profiles_dir / profile
+        return path if path.exists() else None
+
+    if arch:
+        path = profiles_dir / f"{os_name}_{arch}_{build_type.lower()}"
+        if path.exists():
+            return path
+        return None  # Don't fall back — explicit arch must match
+
+    # Default: {os}_{build_type}
+    path = profiles_dir / f"{os_name}_{build_type.lower()}"
+    return path if path.exists() else None
+
+
 @dataclass
 class NativeConfig(PlatformConfig):
     """Configuration for native (conan + cmake) builds"""
@@ -173,20 +227,51 @@ class NativeConfig(PlatformConfig):
     target_arch: str = "x86_64"
     env_vars: dict[str, str] = field(default_factory=dict)
     project_root: Path = field(default_factory=lambda: Path("."))
+    requested_arch: str | None = None
+    profile_override: str | None = None
+    conan_profile_path: Path | None = None
 
     @classmethod
-    def detect(cls, project_root: Optional[Path] = None, build_type: str = "Debug") -> "NativeConfig":
+    def detect(
+        cls,
+        project_root: Optional[Path] = None,
+        build_type: str = "Debug",
+        arch: str | None = None,
+        profile: str | None = None,
+    ) -> "NativeConfig":
         """Auto-detect native build configuration"""
         config = cls()
         config.arch = cls.detect_architecture()
-        config.target_arch = cls.detect_target_architecture(project_root, build_type)
         config.project_root = project_root or Path(".")
 
+        # Load .env first so SBUILD_ARCH is available for profile resolution
         if project_root:
             env_file = project_root / ".env"
             config.env_vars = load_env_file(env_file)
 
+        # Resolve effective arch (CLI > .env > system env)
+        effective_arch = resolve_arch(arch, config.env_vars)
+        config.requested_arch = effective_arch
+        config.profile_override = profile
+
+        # Resolve profile path
+        config.conan_profile_path = resolve_profile_path(
+            config.project_root, build_type, arch=effective_arch, profile=profile,
+        )
+
+        # Detect target arch from resolved profile (or fall back to host)
+        config.target_arch = cls._detect_target_arch(config.conan_profile_path, config.arch)
+
         return config
+
+    @classmethod
+    def _detect_target_arch(cls, profile_path: Path | None, fallback_arch: str) -> str:
+        """Detect target architecture from resolved Conan profile, falling back to host arch."""
+        if profile_path and profile_path.exists():
+            arch = parse_conan_profile_arch(profile_path)
+            if arch:
+                return arch
+        return fallback_arch
 
     @classmethod
     def detect_target_architecture(cls, project_root: Optional[Path], build_type: str) -> str:
@@ -206,6 +291,8 @@ class NativeConfig(PlatformConfig):
         return _ARCH_MAPPING.get(machine, machine)
 
     def build_dir_name(self, build_type: str) -> str:
+        if self.requested_arch:
+            return f"{self.requested_arch}/{build_type}"
         return build_type
 
     def preset_name(self, build_type: str) -> str:
@@ -219,7 +306,7 @@ class NativeConfig(PlatformConfig):
         return dict(self.env_vars)
 
     def validate(self) -> None:
-        pass  # Native config is always valid
+        pass  # Native config is always valid  # Native config is always valid
 
 
 @dataclass
@@ -303,9 +390,9 @@ class WasmConfig(PlatformConfig):
         return "WASM"
 
 
-_CONFIG_FACTORIES: dict[str, Callable[[Path, str], PlatformConfig]] = {
-    "native": lambda root, bt: NativeConfig.detect(root, bt),
-    "wasm": lambda root, bt: WasmConfig.from_env_file(root / ".env.wasm"),
+_CONFIG_FACTORIES: dict[str, Callable[..., PlatformConfig]] = {
+    "native": lambda root, bt, arch=None, profile=None: NativeConfig.detect(root, bt, arch=arch, profile=profile),
+    "wasm": lambda root, bt, **_kw: WasmConfig.from_env_file(root / ".env.wasm"),
 }
 
 
@@ -320,6 +407,8 @@ class BuildConfig:
     jobs: int = os.cpu_count() or 4
     cmake_args: Optional[str] = None
     build_number: Optional[int] = None  # Override git commit count for packaging
+    arch: Optional[str] = None  # Target architecture (x86, x64, arm64)
+    profile: Optional[str] = None  # Exact Conan profile name override
 
     # Set during initialization
     platform_config: Optional[PlatformConfig] = field(default=None, init=False)
@@ -332,7 +421,7 @@ class BuildConfig:
         factory = _CONFIG_FACTORIES.get(self.platform)
         if factory is None:
             raise ConfigError(f"Unknown platform: {self.platform}")
-        self.platform_config = factory(self.project_root, self.build_type)
+        self.platform_config = factory(self.project_root, self.build_type, arch=self.arch, profile=self.profile)
         self.platform_config.validate()
 
         # Cache CMakeLists.txt parsing (avoids re-parsing on every property access)

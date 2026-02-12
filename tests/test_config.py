@@ -12,6 +12,8 @@ from sbuild.config import (
     load_env_file,
     parse_cmake_project_info,
     parse_conan_profile_arch,
+    resolve_arch,
+    resolve_profile_path,
 )
 from sbuild.exceptions import ConfigError, EnvironmentSetupError
 
@@ -421,3 +423,205 @@ class TestBuildConfigBuildNumber:
         with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "git")):
             result = cfg.get_resolved_build_number()
             assert result == 0
+
+
+# -- resolve_arch -------------------------------------------------------------
+
+class TestResolveArch:
+    def test_cli_arch_wins(self):
+        result = resolve_arch("x64", {"SBUILD_ARCH": "x86"})
+        assert result == "x64"
+
+    def test_env_vars_second_priority(self):
+        result = resolve_arch(None, {"SBUILD_ARCH": "arm64"})
+        assert result == "arm64"
+
+    def test_system_env_third_priority(self):
+        with patch.dict("os.environ", {"SBUILD_ARCH": "x86"}):
+            result = resolve_arch(None, {})
+        assert result == "x86"
+
+    def test_env_vars_beat_system_env(self):
+        with patch.dict("os.environ", {"SBUILD_ARCH": "x86"}):
+            result = resolve_arch(None, {"SBUILD_ARCH": "x64"})
+        assert result == "x64"
+
+    def test_none_when_nothing_set(self):
+        with patch.dict("os.environ", {}, clear=True):
+            result = resolve_arch(None, {})
+        assert result is None
+
+
+# -- resolve_profile_path -----------------------------------------------------
+
+class TestResolveProfilePath:
+    def test_default_os_build_type(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_debug").write_text("[settings]\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            result = resolve_profile_path(tmp_path, "Debug")
+        assert result == profiles / "windows_debug"
+
+    def test_default_returns_none_when_missing(self, tmp_path):
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            result = resolve_profile_path(tmp_path, "Debug")
+        assert result is None
+
+    def test_arch_qualified_profile(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_x64_debug").write_text("[settings]\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            result = resolve_profile_path(tmp_path, "Debug", arch="x64")
+        assert result == profiles / "windows_x64_debug"
+
+    def test_arch_returns_none_when_missing(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        # Only default profile exists, not arch-qualified
+        (profiles / "windows_debug").write_text("[settings]\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            result = resolve_profile_path(tmp_path, "Debug", arch="x64")
+        assert result is None  # Does NOT fall back to default
+
+    def test_profile_override(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "my_custom").write_text("[settings]\n", encoding="utf-8")
+        result = resolve_profile_path(tmp_path, "Debug", profile="my_custom")
+        assert result == profiles / "my_custom"
+
+    def test_profile_override_returns_none_when_missing(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        result = resolve_profile_path(tmp_path, "Debug", profile="nonexistent")
+        assert result is None
+
+    def test_profile_takes_precedence_over_arch(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "my_custom").write_text("[settings]\n", encoding="utf-8")
+        (profiles / "windows_x64_debug").write_text("[settings]\n", encoding="utf-8")
+        result = resolve_profile_path(tmp_path, "Debug", arch="x64", profile="my_custom")
+        assert result == profiles / "my_custom"
+
+    def test_linux_profile_name(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "linux_x86_release").write_text("[settings]\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Linux"):
+            result = resolve_profile_path(tmp_path, "Release", arch="x86")
+        assert result == profiles / "linux_x86_release"
+
+
+# -- NativeConfig with arch/profile ------------------------------------------
+
+class TestNativeConfigArchProfile:
+    def test_detect_with_arch(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_x64_debug").write_text(
+            "[settings]\narch=x86_64\nos=Windows\n", encoding="utf-8"
+        )
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = NativeConfig.detect(tmp_path, "Debug", arch="x64")
+        assert cfg.requested_arch == "x64"
+        assert cfg.conan_profile_path == profiles / "windows_x64_debug"
+        assert cfg.target_arch == "x86_64"
+
+    def test_detect_with_profile_override(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "my_custom").write_text(
+            "[settings]\narch=armv8\nos=Windows\n", encoding="utf-8"
+        )
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        cfg = NativeConfig.detect(tmp_path, "Debug", profile="my_custom")
+        assert cfg.profile_override == "my_custom"
+        assert cfg.conan_profile_path == profiles / "my_custom"
+        assert cfg.target_arch == "armv8"
+
+    def test_detect_with_env_arch(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_x86_debug").write_text(
+            "[settings]\narch=x86\nos=Windows\n", encoding="utf-8"
+        )
+        # Write .env with SBUILD_ARCH
+        env_file = tmp_path / ".env"
+        env_file.write_text("SBUILD_ARCH=x86\n", encoding="utf-8")
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = NativeConfig.detect(tmp_path, "Debug")
+        assert cfg.requested_arch == "x86"
+        assert cfg.conan_profile_path == profiles / "windows_x86_debug"
+
+    def test_detect_backward_compatible_no_arch(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_debug").write_text(
+            "[settings]\narch=x86_64\nos=Windows\n", encoding="utf-8"
+        )
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = NativeConfig.detect(tmp_path, "Debug")
+        assert cfg.requested_arch is None
+        assert cfg.conan_profile_path == profiles / "windows_debug"
+
+    def test_build_dir_name_with_arch(self):
+        cfg = NativeConfig(requested_arch="x64")
+        assert cfg.build_dir_name("Debug") == "x64/Debug"
+        assert cfg.build_dir_name("Release") == "x64/Release"
+
+    def test_build_dir_name_without_arch(self):
+        cfg = NativeConfig()
+        assert cfg.build_dir_name("Debug") == "Debug"
+
+    def test_cli_arch_overrides_env_arch(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_x64_debug").write_text(
+            "[settings]\narch=x86_64\nos=Windows\n", encoding="utf-8"
+        )
+        # .env has x86, but CLI passes x64
+        env_file = tmp_path / ".env"
+        env_file.write_text("SBUILD_ARCH=x86\n", encoding="utf-8")
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = NativeConfig.detect(tmp_path, "Debug", arch="x64")
+        assert cfg.requested_arch == "x64"
+
+
+# -- BuildConfig with arch/profile -------------------------------------------
+
+class TestBuildConfigArch:
+    def test_build_dir_with_arch(self, project_root):
+        profiles = project_root / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_x64_debug").write_text(
+            "[settings]\narch=x86_64\nos=Windows\n", encoding="utf-8"
+        )
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = BuildConfig(project_root=project_root, build_type="debug", arch="x64")
+        assert cfg.build_dir == project_root / "build" / "x64" / "Debug"
+
+    def test_build_dir_without_arch(self, project_root):
+        cfg = BuildConfig(project_root=project_root, build_type="debug")
+        assert cfg.build_dir == project_root / "build" / "Debug"
+
+    def test_arch_and_release(self, project_root):
+        profiles = project_root / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_x64_release").write_text(
+            "[settings]\narch=x86_64\nos=Windows\n", encoding="utf-8"
+        )
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = BuildConfig(project_root=project_root, build_type="release", arch="x64")
+        assert cfg.build_dir == project_root / "build" / "x64" / "Release"

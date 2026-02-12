@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `--arch` (`-A`) CLI option for architecture-aware profile selection (x86, x64, arm64)
+- `--profile` CLI option for exact Conan profile name override
+- `SBUILD_ARCH` environment variable for CI/scripting arch selection (`.env` or system env)
+- Architecture-isolated build directories (`build/{arch}/{build_type}`) when `--arch` is used
+- `resolve_arch()` helper for unified arch resolution (CLI > .env > system env)
+- `resolve_profile_path()` helper for unified profile resolution
+- Auto-detection of CMake configure preset names from `CMakeUserPresets.json` — supports both single-config generators (Ninja: `conan-debug`/`conan-release`) and multi-config generators (Visual Studio: `conan-default`)
+- `build_preset_name` property on `PlatformConfig` and `BuildConfig` to separate build presets from configure presets
+- `sbuild doctor` now distinguishes configure vs build presets and reports multi-config generator setups
+- Tests for profile resolution, arch-aware config detection, build directory naming, and preset resolution (single-config, multi-config)
+
+### Changed
+
+- Profile resolution centralized in `NativeConfig.detect()` (removed duplicate logic from `NativeRunner`)
+- `NativeConfig` stores resolved `conan_profile_path` for reuse by runner
+- `BuildConfig`, `BuildSession` accept `arch` and `profile` parameters
+- `.env` file loaded earlier in `NativeConfig.detect()` so `SBUILD_ARCH` is available for profile resolution
+- Config factory signature now passes `arch` and `profile` through to platform config detection
+- Runners now use `build_preset_name` for `cmake --build` commands instead of `preset_name`, fixing multi-config generator support
+
+### Fixed
+
+- Hardcoded `conan-{build_type}` preset names broke builds with multi-config generators (e.g. Visual Studio) that use `conan-default` as configure preset ([#1](https://github.com/saridacloud/sbuild/issues/1))
+
 ## [1.0.1] - 2026-02-12
 
 ### Added
@@ -91,5 +119,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment variable loading from `.env` (native) and `.env.wasm` (WebAssembly)
 - Build number auto-detection from git commit count or `version.h`
 
+[Unreleased]: https://github.com/saridacloud/sbuild/compare/v1.0.1...HEAD
 [1.0.1]: https://github.com/saridacloud/sbuild/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/saridacloud/sbuild/releases/tag/v1.0.0
