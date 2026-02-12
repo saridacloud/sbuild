@@ -150,10 +150,54 @@ class TestNativeConfig:
         assert cfg.build_dir_name("Debug") == "Debug"
         assert cfg.build_dir_name("Release") == "Release"
 
-    def test_preset_name(self):
-        cfg = NativeConfig()
+    def test_preset_name_no_presets_file(self):
+        """No CMakeUserPresets.json → falls back to conan-{build_type} convention."""
+        cfg = NativeConfig(project_root=Path("/nonexistent"))
         assert cfg.preset_name("Debug") == "conan-debug"
         assert cfg.preset_name("Release") == "conan-release"
+
+    def test_preset_name_single_config(self, tmp_path):
+        """Single-config presets file → returns conan-{build_type}."""
+        import json
+        presets = {
+            "version": 4,
+            "include": [f"build/Debug/generators/CMakePresets.json"],
+        }
+        (tmp_path / "CMakeUserPresets.json").write_text(json.dumps(presets))
+        gen_dir = tmp_path / "build" / "Debug" / "generators"
+        gen_dir.mkdir(parents=True)
+        (gen_dir / "CMakePresets.json").write_text(json.dumps({
+            "version": 4,
+            "configurePresets": [{"name": "conan-debug"}],
+        }))
+
+        cfg = NativeConfig(project_root=tmp_path)
+        assert cfg.preset_name("Debug") == "conan-debug"
+
+    def test_preset_name_multi_config(self, tmp_path):
+        """Multi-config presets file (conan-default) → returns conan-default."""
+        import json
+        presets = {
+            "version": 4,
+            "include": [f"build/generators/CMakePresets.json"],
+        }
+        (tmp_path / "CMakeUserPresets.json").write_text(json.dumps(presets))
+        gen_dir = tmp_path / "build" / "generators"
+        gen_dir.mkdir(parents=True)
+        (gen_dir / "CMakePresets.json").write_text(json.dumps({
+            "version": 4,
+            "configurePresets": [{"name": "conan-default"}],
+            "buildPresets": [{"name": "conan-debug"}, {"name": "conan-release"}],
+        }))
+
+        cfg = NativeConfig(project_root=tmp_path)
+        assert cfg.preset_name("Debug") == "conan-default"
+
+    def test_build_preset_name(self):
+        """Build preset is always conan-{build_type} regardless of generator."""
+        cfg = NativeConfig()
+        assert cfg.build_preset_name("Debug") == "conan-debug"
+        assert cfg.build_preset_name("Release") == "conan-release"
 
     def test_get_environment_empty_by_default(self):
         cfg = NativeConfig()
@@ -311,8 +355,32 @@ class TestBuildConfig:
         assert cfg.build_dir == project_root / "build" / "Debug"
 
     def test_preset_name_native(self, project_root):
+        """No presets file → falls back to conan-{build_type} convention."""
         cfg = BuildConfig(project_root=project_root, build_type="release")
         assert cfg.preset_name == "conan-release"
+
+    def test_build_preset_name_native(self, project_root):
+        cfg = BuildConfig(project_root=project_root, build_type="release")
+        assert cfg.build_preset_name == "conan-release"
+
+    def test_preset_name_native_multi_config(self, project_root):
+        """Multi-config presets → configure preset is conan-default."""
+        import json
+        presets = {
+            "version": 4,
+            "include": ["build/generators/CMakePresets.json"],
+        }
+        (project_root / "CMakeUserPresets.json").write_text(json.dumps(presets))
+        gen_dir = project_root / "build" / "generators"
+        gen_dir.mkdir(parents=True)
+        (gen_dir / "CMakePresets.json").write_text(json.dumps({
+            "version": 4,
+            "configurePresets": [{"name": "conan-default"}],
+            "buildPresets": [{"name": "conan-debug"}, {"name": "conan-release"}],
+        }))
+        cfg = BuildConfig(project_root=project_root, build_type="release")
+        assert cfg.preset_name == "conan-default"
+        assert cfg.build_preset_name == "conan-release"
 
     def test_native_config_reads_target_arch_from_profile(self, project_root):
         profiles = project_root / "profiles"

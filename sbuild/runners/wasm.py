@@ -61,7 +61,7 @@ class WasmRunner(BaseRunner):
 
     def build(self) -> bool:
         """Build the WASM project"""
-        cmd = f"cmake --build --preset {self.config.preset_name} -j{self.config.jobs}"
+        cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building WASM {self.config.build_type}")
 
     def serve(self, https: bool = False, port: Optional[int] = None, **kwargs) -> None:
