@@ -232,6 +232,13 @@ class DoctorReport:
         # Platform-specific
         if self._is_windows:
             results.append(self._check_vcvars())
+            if self._platform.toolchain_path:
+                from .platform.windows import WindowsEnv
+                if isinstance(self._platform, WindowsEnv):
+                    results.append(CheckResult(
+                        "vcvars arch", CheckStatus.OK,
+                        message=self._platform.vcvars_arch,
+                    ))
         else:
             results.append(_check_tool_version(
                 "gcc", ["--version"], required=True,
@@ -272,9 +279,9 @@ class DoctorReport:
 
     def _check_vcvars(self) -> CheckResult:
         if self._platform.toolchain_path:
-            return CheckResult("vcvars64.bat", CheckStatus.OK, path=self._platform.toolchain_path)
+            return CheckResult("vcvarsall.bat", CheckStatus.OK, path=self._platform.toolchain_path)
         return CheckResult(
-            "vcvars64.bat", CheckStatus.FAIL,
+            "vcvarsall.bat", CheckStatus.FAIL,
             message="Not found",
             fix_hint="Install Visual Studio 2019/2022 with C++ desktop workload",
         )
@@ -564,7 +571,7 @@ def _check_tool_version(
                     raise FileNotFoundError
                 output = result.stdout + result.stderr
                 version = _parse_version(output)
-                label = f"{version} (via vcvars64)" if version else "(via vcvars64)"
+                label = f"{version} (via vcvarsall)" if version else "(via vcvarsall)"
                 return CheckResult(tool, CheckStatus.OK, version=label)
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass

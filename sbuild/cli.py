@@ -140,6 +140,15 @@ def build(
       [cyan]sbuild build --clean[/cyan]            Clean before building
       [cyan]sbuild build -r -v[/cyan]              Release build with verbose output
       [cyan]sbuild build -p wasm[/cyan]            WebAssembly debug build
+
+    [bold]Cross-compilation (Windows):[/bold]
+
+      The MSVC toolchain architecture is auto-detected from the Conan profile's
+      [cyan]arch=[/cyan] setting (e.g. [cyan]arch=x86[/cyan] in profiles/windows_debug activates
+      the x86 cross-compiler via vcvarsall.bat).
+
+      Override manually with [cyan]VCVARS_ARCH[/cyan] in .env (values: amd64, amd64_x86,
+      amd64_arm64, amd64_arm).
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:

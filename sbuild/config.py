@@ -27,6 +27,27 @@ def load_env_file(env_file: Path) -> dict[str, str]:
     return env_vars
 
 
+def parse_conan_profile_arch(profile_path: Path) -> str | None:
+    """Extract the arch setting from a Conan profile's [settings] section."""
+    if not profile_path.exists():
+        return None
+
+    in_settings = False
+    with open(profile_path, "r", encoding="utf-8") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if stripped.startswith("["):
+                in_settings = stripped.lower() == "[settings]"
+                continue
+            if in_settings and "=" in stripped:
+                key, _, value = stripped.partition("=")
+                if key.strip() == "arch":
+                    return value.strip()
+    return None
+
+
 def parse_cmake_project_info(cmake_file: Path) -> tuple[str, str]:
     """Extract project name and version from CMakeLists.txt"""
     import re
@@ -99,19 +120,32 @@ class NativeConfig(PlatformConfig):
     """Configuration for native (conan + cmake) builds"""
 
     arch: str = "x86_64"
+    target_arch: str = "x86_64"
     env_vars: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def detect(cls, project_root: Optional[Path] = None) -> "NativeConfig":
+    def detect(cls, project_root: Optional[Path] = None, build_type: str = "Debug") -> "NativeConfig":
         """Auto-detect native build configuration"""
         config = cls()
         config.arch = cls.detect_architecture()
+        config.target_arch = cls.detect_target_architecture(project_root, build_type)
 
         if project_root:
             env_file = project_root / ".env"
             config.env_vars = load_env_file(env_file)
 
         return config
+
+    @classmethod
+    def detect_target_architecture(cls, project_root: Optional[Path], build_type: str) -> str:
+        """Detect target architecture from Conan profile, falling back to host arch."""
+        if project_root:
+            os_name = "windows" if platform.system() == "Windows" else "linux"
+            profile_path = project_root / "profiles" / f"{os_name}_{build_type.lower()}"
+            arch = parse_conan_profile_arch(profile_path)
+            if arch:
+                return arch
+        return cls.detect_architecture()
 
     @staticmethod
     def detect_architecture() -> str:
@@ -213,9 +247,9 @@ class WasmConfig(PlatformConfig):
         return "WASM"
 
 
-_CONFIG_FACTORIES: dict[str, Callable[[Path], PlatformConfig]] = {
-    "native": lambda root: NativeConfig.detect(root),
-    "wasm": lambda root: WasmConfig.from_env_file(root / ".env.wasm"),
+_CONFIG_FACTORIES: dict[str, Callable[[Path, str], PlatformConfig]] = {
+    "native": lambda root, bt: NativeConfig.detect(root, bt),
+    "wasm": lambda root, bt: WasmConfig.from_env_file(root / ".env.wasm"),
 }
 
 
@@ -242,7 +276,7 @@ class BuildConfig:
         factory = _CONFIG_FACTORIES.get(self.platform)
         if factory is None:
             raise ConfigError(f"Unknown platform: {self.platform}")
-        self.platform_config = factory(self.project_root)
+        self.platform_config = factory(self.project_root, self.build_type)
         self.platform_config.validate()
 
         # Cache CMakeLists.txt parsing (avoids re-parsing on every property access)

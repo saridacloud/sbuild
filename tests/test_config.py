@@ -11,6 +11,7 @@ from sbuild.config import (
     WasmConfig,
     load_env_file,
     parse_cmake_project_info,
+    parse_conan_profile_arch,
 )
 from sbuild.exceptions import ConfigError, EnvironmentSetupError
 
@@ -99,6 +100,48 @@ class TestParseCmakeProjectInfo:
         assert version == "0.0.0"
 
 
+# -- parse_conan_profile_arch -------------------------------------------------
+
+class TestParseConanProfileArch:
+    def test_arch_from_settings(self, tmp_path):
+        profile = tmp_path / "profile"
+        profile.write_text("[settings]\narch=x86\nos=Windows\n", encoding="utf-8")
+        assert parse_conan_profile_arch(profile) == "x86"
+
+    def test_no_arch_returns_none(self, tmp_path):
+        profile = tmp_path / "profile"
+        profile.write_text("[settings]\nos=Windows\n", encoding="utf-8")
+        assert parse_conan_profile_arch(profile) is None
+
+    def test_arch_in_wrong_section_ignored(self, tmp_path):
+        profile = tmp_path / "profile"
+        profile.write_text("[options]\narch=x86\n", encoding="utf-8")
+        assert parse_conan_profile_arch(profile) is None
+
+    def test_missing_file_returns_none(self, tmp_path):
+        assert parse_conan_profile_arch(tmp_path / "nonexistent") is None
+
+    def test_whitespace_stripped(self, tmp_path):
+        profile = tmp_path / "profile"
+        profile.write_text("[settings]\n  arch = armv8 \n", encoding="utf-8")
+        assert parse_conan_profile_arch(profile) == "armv8"
+
+    def test_comments_skipped(self, tmp_path):
+        profile = tmp_path / "profile"
+        profile.write_text(
+            "[settings]\n# arch=x86\narch=x86_64\n", encoding="utf-8"
+        )
+        assert parse_conan_profile_arch(profile) == "x86_64"
+
+    def test_multiple_sections(self, tmp_path):
+        profile = tmp_path / "profile"
+        profile.write_text(
+            "[options]\nfoo=bar\n\n[settings]\narch=armv7\nos=Linux\n",
+            encoding="utf-8",
+        )
+        assert parse_conan_profile_arch(profile) == "armv7"
+
+
 # -- NativeConfig -------------------------------------------------------------
 
 class TestNativeConfig:
@@ -138,6 +181,20 @@ class TestNativeConfig:
     def test_detect_architecture(self, machine, expected):
         with patch("sbuild.config.platform.machine", return_value=machine):
             assert NativeConfig.detect_architecture() == expected
+
+    def test_detect_target_architecture_from_profile(self, tmp_path):
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        profile = profiles / "windows_debug"
+        profile.write_text("[settings]\narch=x86\nos=Windows\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            arch = NativeConfig.detect_target_architecture(tmp_path, "Debug")
+        assert arch == "x86"
+
+    def test_detect_target_architecture_falls_back_to_host(self, tmp_path):
+        with patch("sbuild.config.platform.machine", return_value="AMD64"):
+            arch = NativeConfig.detect_target_architecture(tmp_path, "Debug")
+        assert arch == "x86_64"
 
 
 # -- WasmConfig ---------------------------------------------------------------
@@ -256,6 +313,15 @@ class TestBuildConfig:
     def test_preset_name_native(self, project_root):
         cfg = BuildConfig(project_root=project_root, build_type="release")
         assert cfg.preset_name == "conan-release"
+
+    def test_native_config_reads_target_arch_from_profile(self, project_root):
+        profiles = project_root / "profiles"
+        profiles.mkdir()
+        profile = profiles / "windows_debug"
+        profile.write_text("[settings]\narch=x86\nos=Windows\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = BuildConfig(project_root=project_root, build_type="debug")
+        assert cfg.platform_config.target_arch == "x86"
 
 
 class TestBuildConfigBuildNumber:
