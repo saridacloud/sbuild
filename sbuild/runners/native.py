@@ -87,7 +87,7 @@ class NativeRunner(BaseRunner):
 
     def build(self) -> bool:
         """Build the project"""
-        cmd = f"cmake --build --preset {self.config.preset_name} -j{self.config.jobs}"
+        cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building {self.config.build_type}")
 
     def show_setup_info(self) -> None:

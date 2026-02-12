@@ -4,6 +4,7 @@ sbuild - Configuration management
 Provides dataclasses for build configuration with environment detection.
 """
 
+import json
 import os
 import platform
 from abc import ABC, abstractmethod
@@ -71,6 +72,51 @@ def parse_cmake_project_info(cmake_file: Path) -> tuple[str, str]:
 
 
 
+def _resolve_configure_preset(project_root: Path, build_type: str) -> str:
+    """Resolve the CMake configure preset name from CMakeUserPresets.json.
+
+    Reads the presets file and follows includes to find available configure presets.
+    Returns 'conan-{build_type}' for single-config generators (e.g. Ninja),
+    'conan-default' for multi-config generators (e.g. Visual Studio),
+    or falls back to 'conan-{build_type}' convention if no file exists.
+    """
+    conventional = f"conan-{build_type.lower()}"
+    configure_names: set[str] = set()
+
+    presets_file = project_root / "CMakeUserPresets.json"
+    if not presets_file.exists():
+        return conventional
+
+    try:
+        data = json.loads(presets_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return conventional
+
+    # Collect configure presets from the main file
+    for preset in data.get("configurePresets", []):
+        if "name" in preset:
+            configure_names.add(preset["name"])
+
+    # Follow includes to find more configure presets
+    for include in data.get("include", []):
+        inc_path = project_root / include
+        if inc_path.exists():
+            try:
+                inc_data = json.loads(inc_path.read_text(encoding="utf-8"))
+                for preset in inc_data.get("configurePresets", []):
+                    if "name" in preset:
+                        configure_names.add(preset["name"])
+            except (json.JSONDecodeError, OSError):
+                pass
+
+    # Prefer type-specific preset (single-config), fall back to conan-default (multi-config)
+    if conventional in configure_names:
+        return conventional
+    if "conan-default" in configure_names:
+        return "conan-default"
+    return conventional
+
+
 class PlatformConfig(ABC):
     """Abstract base for platform-specific build configuration."""
 
@@ -83,6 +129,10 @@ class PlatformConfig(ABC):
     def preset_name(self, build_type: str) -> str:
         """Return the CMake preset name for the given build type."""
         ...
+
+    def build_preset_name(self, build_type: str) -> str:
+        """CMake build preset name. Defaults to same as configure preset."""
+        return self.preset_name(build_type)
 
     @abstractmethod
     def get_environment(self) -> dict[str, str]:
@@ -122,6 +172,7 @@ class NativeConfig(PlatformConfig):
     arch: str = "x86_64"
     target_arch: str = "x86_64"
     env_vars: dict[str, str] = field(default_factory=dict)
+    project_root: Path = field(default_factory=lambda: Path("."))
 
     @classmethod
     def detect(cls, project_root: Optional[Path] = None, build_type: str = "Debug") -> "NativeConfig":
@@ -129,6 +180,7 @@ class NativeConfig(PlatformConfig):
         config = cls()
         config.arch = cls.detect_architecture()
         config.target_arch = cls.detect_target_architecture(project_root, build_type)
+        config.project_root = project_root or Path(".")
 
         if project_root:
             env_file = project_root / ".env"
@@ -157,6 +209,10 @@ class NativeConfig(PlatformConfig):
         return build_type
 
     def preset_name(self, build_type: str) -> str:
+        return _resolve_configure_preset(self.project_root, build_type)
+
+    def build_preset_name(self, build_type: str) -> str:
+        """Build preset is always conan-{build_type} (Conan generates type-specific build presets)."""
         return f"conan-{build_type.lower()}"
 
     def get_environment(self) -> dict[str, str]:
@@ -289,8 +345,13 @@ class BuildConfig:
 
     @property
     def preset_name(self) -> str:
-        """Return CMake preset name"""
+        """Return CMake configure preset name"""
         return self.platform_config.preset_name(self.build_type)
+
+    @property
+    def build_preset_name(self) -> str:
+        """Return CMake build preset name"""
+        return self.platform_config.build_preset_name(self.build_type)
 
     @property
     def is_windows(self) -> bool:

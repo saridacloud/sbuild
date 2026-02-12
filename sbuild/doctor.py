@@ -375,7 +375,8 @@ class DoctorReport:
 
     def _check_cmake_presets(self, preset_files: list[Path]) -> list[CheckResult]:
         results: list[CheckResult] = []
-        preset_names: set[str] = set()
+        configure_names: set[str] = set()
+        build_names: set[str] = set()
 
         for preset_file in preset_files:
             try:
@@ -389,7 +390,9 @@ class DoctorReport:
                 continue
 
             results.append(CheckResult(preset_file.name, CheckStatus.OK, path=preset_file))
-            preset_names.update(_collect_preset_names(data))
+            collected = _collect_preset_names(data)
+            configure_names.update(collected["configure"])
+            build_names.update(collected["build"])
 
             # Also check included preset files
             for include in data.get("include", []):
@@ -397,29 +400,67 @@ class DoctorReport:
                 if inc_path.exists():
                     try:
                         inc_data = json.loads(inc_path.read_text(encoding="utf-8"))
-                        preset_names.update(_collect_preset_names(inc_data))
+                        inc_collected = _collect_preset_names(inc_data)
+                        configure_names.update(inc_collected["configure"])
+                        build_names.update(inc_collected["build"])
                     except (json.JSONDecodeError, OSError):
                         pass
 
-        expected = ["conan-debug", "conan-release", "wasm-debug", "wasm-release"]
-        for name in expected:
-            if name in preset_names:
-                results.append(CheckResult(f"Preset '{name}'", CheckStatus.OK))
-            else:
-                # WASM presets are expected only when .env.wasm exists
-                is_wasm = name.startswith("wasm-")
-                wasm_env = (self.project_root / ".env.wasm").exists()
-                if is_wasm and not wasm_env:
+        # All preset names (for backward-compat lookups)
+        all_names = configure_names | build_names
+
+        # Detect multi-config vs single-config for native presets
+        is_multi_config = "conan-default" in configure_names
+
+        if is_multi_config:
+            # Multi-config: expect conan-default configure preset + type-specific build presets
+            results.append(CheckResult(
+                "Preset 'conan-default'", CheckStatus.OK,
+                message="Multi-config configure preset",
+            ))
+            for bt in ("debug", "release"):
+                name = f"conan-{bt}"
+                if name in build_names:
+                    results.append(CheckResult(
+                        f"Preset '{name}'", CheckStatus.OK,
+                        message="Build preset",
+                    ))
+                else:
                     results.append(CheckResult(
                         f"Preset '{name}'", CheckStatus.WARN,
-                        message="Not found (WASM not configured)",
+                        message="Build preset not found",
+                        fix_hint=f"Run 'sbuild configure' to generate the '{name}' build preset",
                     ))
+        else:
+            # Single-config: expect conan-debug / conan-release as configure presets
+            for bt in ("debug", "release"):
+                name = f"conan-{bt}"
+                if name in all_names:
+                    results.append(CheckResult(f"Preset '{name}'", CheckStatus.OK))
                 else:
                     results.append(CheckResult(
                         f"Preset '{name}'", CheckStatus.WARN,
                         message="Not found",
                         fix_hint=f"Run 'sbuild configure' to generate the '{name}' preset",
                     ))
+
+        # WASM presets (unchanged logic)
+        wasm_env = (self.project_root / ".env.wasm").exists()
+        for bt in ("debug", "release"):
+            name = f"wasm-{bt}"
+            if name in all_names:
+                results.append(CheckResult(f"Preset '{name}'", CheckStatus.OK))
+            elif not wasm_env:
+                results.append(CheckResult(
+                    f"Preset '{name}'", CheckStatus.WARN,
+                    message="Not found (WASM not configured)",
+                ))
+            else:
+                results.append(CheckResult(
+                    f"Preset '{name}'", CheckStatus.WARN,
+                    message="Not found",
+                    fix_hint=f"Run 'sbuild configure' to generate the '{name}' preset",
+                ))
 
         return results
 
@@ -626,11 +667,9 @@ def _which(tool: str) -> Path | None:
     return Path(p) if p else None
 
 
-def _collect_preset_names(data: dict) -> set[str]:
-    """Gather all configure and build preset names from a CMake preset dict."""
-    names: set[str] = set()
-    for key in ("configurePresets", "buildPresets"):
-        for preset in data.get(key, []):
-            if "name" in preset:
-                names.add(preset["name"])
-    return names
+def _collect_preset_names(data: dict) -> dict[str, set[str]]:
+    """Gather configure and build preset names separately from a CMake preset dict."""
+    return {
+        "configure": {p["name"] for p in data.get("configurePresets", []) if "name" in p},
+        "build": {p["name"] for p in data.get("buildPresets", []) if "name" in p},
+    }

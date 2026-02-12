@@ -43,25 +43,35 @@ class TestParseVersion:
 class TestCollectPresetNames:
     def test_configure_presets(self):
         data = {"configurePresets": [{"name": "conan-debug"}, {"name": "conan-release"}]}
-        assert _collect_preset_names(data) == {"conan-debug", "conan-release"}
+        result = _collect_preset_names(data)
+        assert result["configure"] == {"conan-debug", "conan-release"}
+        assert result["build"] == set()
 
     def test_build_presets(self):
         data = {"buildPresets": [{"name": "conan-debug"}]}
-        assert _collect_preset_names(data) == {"conan-debug"}
+        result = _collect_preset_names(data)
+        assert result["configure"] == set()
+        assert result["build"] == {"conan-debug"}
 
     def test_both(self):
         data = {
             "configurePresets": [{"name": "a"}],
             "buildPresets": [{"name": "b"}],
         }
-        assert _collect_preset_names(data) == {"a", "b"}
+        result = _collect_preset_names(data)
+        assert result["configure"] == {"a"}
+        assert result["build"] == {"b"}
 
     def test_empty_dict(self):
-        assert _collect_preset_names({}) == set()
+        result = _collect_preset_names({})
+        assert result["configure"] == set()
+        assert result["build"] == set()
 
     def test_missing_name_key(self):
         data = {"configurePresets": [{"hidden": True}]}
-        assert _collect_preset_names(data) == set()
+        result = _collect_preset_names(data)
+        assert result["configure"] == set()
+        assert result["build"] == set()
 
 
 # -- _status_markup -----------------------------------------------------------
@@ -223,6 +233,60 @@ class TestCheckCmakePresets:
 
         conan_debug = [r for r in results if r.name == "Preset 'conan-debug'"]
         assert conan_debug[0].status == CheckStatus.OK
+
+    def test_multi_config_presets(self, tmp_path):
+        """Multi-config presets (conan-default configure + type-specific build presets) → all OK."""
+        (tmp_path / "CMakeLists.txt").write_text('project(Test VERSION 1.0.0)')
+        presets = {
+            "version": 4,
+            "configurePresets": [{"name": "conan-default"}],
+            "buildPresets": [
+                {"name": "conan-debug", "configurePreset": "conan-default"},
+                {"name": "conan-release", "configurePreset": "conan-default"},
+            ],
+        }
+        (tmp_path / "CMakeUserPresets.json").write_text(json.dumps(presets))
+
+        report = _make_report(tmp_path)
+        results = report._check_project_config()
+
+        # conan-default configure preset should be OK
+        default_results = [r for r in results if r.name == "Preset 'conan-default'"]
+        assert len(default_results) == 1
+        assert default_results[0].status == CheckStatus.OK
+        assert "Multi-config" in default_results[0].message
+
+        # Build presets should be OK
+        for bt in ("debug", "release"):
+            build_results = [r for r in results if r.name == f"Preset 'conan-{bt}'"]
+            assert len(build_results) == 1
+            assert build_results[0].status == CheckStatus.OK
+            assert "Build preset" in build_results[0].message
+
+    def test_multi_config_missing_build_preset(self, tmp_path):
+        """Multi-config with conan-default but missing build presets → WARN."""
+        (tmp_path / "CMakeLists.txt").write_text('project(Test VERSION 1.0.0)')
+        presets = {
+            "version": 4,
+            "configurePresets": [{"name": "conan-default"}],
+            "buildPresets": [],
+        }
+        (tmp_path / "CMakeUserPresets.json").write_text(json.dumps(presets))
+
+        report = _make_report(tmp_path)
+        results = report._check_project_config()
+
+        # conan-default configure preset should be OK
+        default_results = [r for r in results if r.name == "Preset 'conan-default'"]
+        assert len(default_results) == 1
+        assert default_results[0].status == CheckStatus.OK
+
+        # Build presets should be WARN
+        for bt in ("debug", "release"):
+            build_results = [r for r in results if r.name == f"Preset 'conan-{bt}'"]
+            assert len(build_results) == 1
+            assert build_results[0].status == CheckStatus.WARN
+            assert "not found" in build_results[0].message.lower()
 
 
 # -- venv check ---------------------------------------------------------------

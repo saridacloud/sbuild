@@ -179,6 +179,20 @@ Place Conan 2 profiles in a `profiles/` directory using the naming convention `{
 - `profiles/windows_debug`, `profiles/windows_release`
 - `profiles/linux_debug`, `profiles/linux_release`
 
+The CMake generator can be configured per-profile via Conan's `[conf]` section:
+
+```
+[settings]
+arch=x86_64
+build_type=Debug
+...
+
+[conf]
+tools.cmake.cmaketoolchain:generator=Ninja
+```
+
+If no generator is specified, Conan uses the system default (Visual Studio on Windows, Unix Makefiles on Linux). Ninja is recommended for faster builds. Different profiles can use different generators (e.g. Ninja for CI, Visual Studio for IDE debugging).
+
 ### .env (native builds)
 
 Optional `KEY=VALUE` file for native build environment variables:
@@ -204,10 +218,13 @@ Optional: `OPENSSL` for OpenSSL support in WASM builds.
 
 ### CMake presets
 
-`sbuild configure` runs Conan, which generates `CMakeUserPresets.json`. A manually maintained `CMakePresets.json` may also be present. The expected preset names are:
+`sbuild configure` runs Conan, which generates `CMakeUserPresets.json`. A manually maintained `CMakePresets.json` may also be present. sbuild auto-detects preset names from the presets file:
 
-- Native: `conan-debug`, `conan-release`
-- WASM: `wasm-debug`, `wasm-release`
+- **Single-config generators** (Ninja, Unix Makefiles): Conan generates configure presets named `conan-debug` / `conan-release`
+- **Multi-config generators** (Visual Studio): Conan generates a single configure preset `conan-default` with build presets `conan-debug` / `conan-release`
+- **WASM**: `wasm-debug`, `wasm-release`
+
+sbuild reads the actual presets file to determine which pattern is in use — no manual configuration is needed.
 
 ### Build output
 
