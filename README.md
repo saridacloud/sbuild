@@ -1,6 +1,6 @@
 # sbuild
 
-Unified build system for Conan 2 + CMake projects with native and WebAssembly support.
+One CLI to drive Conan 2, CMake, CTest, and CPack across native Windows/Linux and WebAssembly targets — with live terminal output, environment diagnostics, and packaging built in.
 
 Provides the `sbuild` CLI command with Rich-powered live output, automatic log rotation, and platform-specific runners for native (Conan + CMake with vcvars64) and WebAssembly (Emscripten + CMake) builds.
 
