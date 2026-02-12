@@ -2,7 +2,7 @@
 
 One CLI to drive Conan 2, CMake, CTest, and CPack across native Windows/Linux and WebAssembly targets — with live terminal output, environment diagnostics, and packaging built in.
 
-Provides the `sbuild` CLI command with Rich-powered live output, automatic log rotation, and platform-specific runners for native (Conan + CMake with vcvars64) and WebAssembly (Emscripten + CMake) builds.
+Provides the `sbuild` CLI command with Rich-powered live output, automatic log rotation, and platform-specific runners for native (Conan + CMake with vcvarsall) and WebAssembly (Emscripten + CMake) builds.
 
 ## Requirements
 
@@ -209,7 +209,7 @@ If no generator is specified, Conan uses the system default (Visual Studio on Wi
 Optional `KEY=VALUE` file for native build environment variables:
 
 ```
-VCVARS_PATH=C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat
+VCVARS_PATH=C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat
 QT_IFW_ROOT=C:\Qt\Tools\QtInstallerFramework\4.8
 SBUILD_ARCH=x64    # Target architecture (x86, x64, arm64) — overridden by --arch CLI option
 ```
@@ -256,7 +256,7 @@ sbuild auto-detects project settings from the working directory:
 - **Project name/version**: Parsed from `CMakeLists.txt` (`project(name VERSION x.y.z)`)
 - **Conan profiles**: Looked up in `profiles/` — uses `{os}_{arch}_{build_type}` when `--arch` is given, `{os}_{build_type}` by default, or exact name with `--profile`
 - **Environment variables**: Loaded from `.env` (native) and `.env.wasm` (WebAssembly)
-- **vcvars64 override**: Set `VCVARS_PATH` in `.env` or as an environment variable to override auto-detection
+- **vcvarsall override**: Set `VCVARS_PATH` in `.env` or as an environment variable to override auto-detection
 - **Build output**: Written to `build/Debug`, `build/Release`, or `build/wasm-debug`
 - **Build logs**: Saved to `build_logs/` with automatic rotation (keeps last 10)
 
