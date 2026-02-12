@@ -1,234 +1,412 @@
 # sbuild
 
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![Python: 3.12+](https://img.shields.io/badge/Python-3.12+-3776AB.svg)](https://www.python.org/)
+[![Status: Beta](https://img.shields.io/badge/Status-Beta-yellow.svg)]()
+
 Unified build system for Conan 2 + CMake projects with native and WebAssembly support.
 
-Provides the `sbuild` CLI command with Rich-powered live output, automatic log rotation, and platform-specific runners for native (Conan + CMake with vcvars64) and WebAssembly (Emscripten + CMake) builds.
+---
 
-## Requirements
+## Table of Contents
 
-- Python >= 3.12
-- [Conan 2.x](https://conan.io/) (system tool, not a Python dependency of sbuild)
-- CMake 3.29+
-- A C++ compiler (Visual Studio 2019/2022 on Windows, GCC/Clang on Linux)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Configuration](#configuration)
+- [Project Setup](#project-setup)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
-## Installation
-
-### Recommended: Use a virtual environment
-
-Create a virtual environment in your project to keep sbuild and its dependencies isolated:
+## Quick Start
 
 ```bash
-# Create (once)
+sbuild build                            # Debug build
+sbuild build --release                  # Release build
+sbuild build --all                      # Build both debug and release
+sbuild test                             # Run CTest suite
+sbuild doctor                           # Check environment health
+```
+
+<details>
+<summary><strong>Installation</strong></summary>
+
+### Prerequisites
+
+- Python >= 3.12
+- [Conan 2.x](https://conan.io/)
+- CMake 3.29+
+- C++ compiler (Visual Studio 2019/2022 on Windows, GCC/Clang on Linux)
+
+### Virtual environment (recommended)
+
+```bash
 python -m venv .venv
 
 # Activate
-# Windows (cmd)
-.venv\Scripts\activate
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-# Linux / macOS
-source .venv/bin/activate
+# Windows (cmd):        .venv\Scripts\activate
+# Windows (PowerShell): .venv\Scripts\Activate.ps1
+# Linux / macOS:        source .venv/bin/activate
 
-# Then install sbuild (and other tools like conan) inside the venv
 pip install conan
-pip install git+https://github.com/saridacloud/sbuild.git
 ```
 
-> **Tip:** Add `.venv/` to your `.gitignore`.
-
-### From git server
-
-Install directly from a git repository URL:
+### Install from git
 
 ```bash
 pip install git+https://github.com/saridacloud/sbuild.git
-```
 
-Or with a specific branch/tag:
-
-```bash
+# Specific branch or tag:
 pip install git+https://github.com/saridacloud/sbuild.git@main
 pip install git+https://github.com/saridacloud/sbuild.git@v1.0.0
-```
 
-Or force to update to the latest commit:
-
-```bash
+# Force update to latest:
 pip install --force-reinstall git+https://github.com/saridacloud/sbuild.git@develop
 ```
 
-### From git submodule
+### Install from git submodule
 
-If sbuild is included as a git submodule in your project (e.g. at `scripts/`):
+If sbuild is included as a submodule (e.g. at `scripts/`):
 
 ```bash
-# Editable install (recommended for development)
-pip install -e path/to/scripts
-
-# Regular install
-pip install path/to/scripts
+pip install -e scripts    # Editable (recommended for development)
+pip install scripts       # Regular install
 ```
 
-For example, in a project that has sbuild at `scripts/`:
+</details>
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `sbuild build` | Incremental build (also the default when running `sbuild` with no command) |
+| `sbuild rebuild` | Clean + full rebuild (conan install + cmake configure + build) |
+| `sbuild clean` | Remove build artifacts |
+| `sbuild configure` | Reconfigure without building (conan install + cmake configure) |
+| `sbuild install` | Install built project to a directory |
+| `sbuild package` | Create distribution package via CPack |
+| `sbuild serve` | Start development server for WASM testing (requires `--platform wasm`) |
+| `sbuild test` | Run unit tests via CTest (native only) |
+| `sbuild doctor` | Check environment health and diagnose setup issues |
+
+### Global Options
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--version` | `-V` | Show version and exit |
+
+---
+
+<details>
+<summary><strong>build</strong> — Incremental build</summary>
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Release build (default: debug) |
+| `--all` | `-a` | bool | `False` | Build both debug and release |
+| `--platform` | `-p` | str | `native` | Build platform: `native` or `wasm` |
+| `--clean` | `-c` | bool | `False` | Clean before building |
+| `--verbose` | `-v` | bool | `False` | Show full command output |
+| `--jobs` | `-j` | int | CPU count | Parallel build jobs |
+| `--arch` | `-A` | str | — | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | str | — | Exact Conan profile name (overrides `--arch`) |
+| `--build-number` | `-b` | int | — | Override build number |
+| `--cmake-args` | | str | — | Additional CMake arguments |
 
 ```bash
-pip install -e scripts
-```
-
-The editable install (`-e`) means changes to the sbuild source are immediately available without reinstalling.
-
-## Usage
-
-Run `sbuild` from your project root directory (where `CMakeLists.txt` lives):
-
-```bash
-sbuild --help                           # Show all commands
-sbuild build                            # Debug build (default)
+sbuild build                            # Debug build
 sbuild build --release                  # Release build
-sbuild build --all                      # Build both debug and release
+sbuild build --all                      # Both debug and release
 sbuild build --clean                    # Clean before building
-sbuild rebuild                          # Clean + full rebuild
-sbuild configure                        # Configure only (conan install + cmake)
-sbuild test                             # Run unit tests
-sbuild test --filter "App.*"          # Run tests matching pattern
-sbuild package --release                # Create distribution package
-sbuild package --release -G NSIS        # Windows installer
-sbuild package --release -G ZIP         # ZIP archive
-sbuild package --release --fresh        # Clean rebuild then package
-sbuild doctor                           # Check environment health
-sbuild doctor -v                        # Show tool paths and details
-sbuild install --release                # Install to ./install/Release
+sbuild build --arch x64 --release       # x64 release build
+sbuild build -p wasm                    # WebAssembly debug build
+```
+
+</details>
+
+<details>
+<summary><strong>rebuild</strong> — Clean + full rebuild</summary>
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Release build (default: debug) |
+| `--all` | `-a` | bool | `False` | Rebuild both debug and release |
+| `--platform` | `-p` | str | `native` | Build platform: `native` or `wasm` |
+| `--verbose` | `-v` | bool | `False` | Show full command output |
+| `--jobs` | `-j` | int | CPU count | Parallel build jobs |
+| `--arch` | `-A` | str | — | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | str | — | Exact Conan profile name (overrides `--arch`) |
+| `--build-number` | `-b` | int | — | Override build number |
+| `--cmake-args` | | str | — | Additional CMake arguments |
+
+```bash
+sbuild rebuild                          # Full debug rebuild
+sbuild rebuild --release                # Full release rebuild
+sbuild rebuild --all                    # Rebuild both debug and release
+```
+
+</details>
+
+<details>
+<summary><strong>clean</strong> — Remove build artifacts</summary>
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Clean release build (default: debug) |
+| `--platform` | `-p` | str | `native` | Build platform: `native` or `wasm` |
+| `--arch` | `-A` | str | — | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | str | — | Exact Conan profile name |
+
+```bash
+sbuild clean                            # Clean debug build
+sbuild clean --release                  # Clean release build
+sbuild clean --arch x64                 # Clean x64 debug build
+```
+
+</details>
+
+<details>
+<summary><strong>configure</strong> — Reconfigure without building</summary>
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Configure release (default: debug) |
+| `--platform` | `-p` | str | `native` | Build platform: `native` or `wasm` |
+| `--verbose` | `-v` | bool | `False` | Show full command output |
+| `--arch` | `-A` | str | — | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | str | — | Exact Conan profile name (overrides `--arch`) |
+| `--build-number` | `-b` | int | — | Override build number |
+| `--cmake-args` | | str | — | Additional CMake arguments |
+
+```bash
+sbuild configure                        # Configure debug
+sbuild configure --release              # Configure release
+sbuild configure --cmake-args "-DENABLE_FEATURE=ON"
+```
+
+</details>
+
+<details>
+<summary><strong>install</strong> — Install built project</summary>
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Install release build (default: debug) |
+| `--platform` | `-p` | str | `native` | Build platform: `native` or `wasm` |
+| `--prefix` | | path | — | Installation prefix directory |
+| `--component` | | str | — | Component to install |
+| `--system-install` | | bool | `False` | Install to system location |
+| `--arch` | `-A` | str | — | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | str | — | Exact Conan profile name |
+
+```bash
+sbuild install                          # Install debug to ./install/Debug
+sbuild install --release                # Install release to ./install/Release
 sbuild install --release --prefix dist  # Install to custom directory
 ```
 
-### WebAssembly builds
+</details>
 
-Requires Emscripten SDK and Qt 6 WebAssembly. Configure paths in `.env.wasm`:
+<details>
+<summary><strong>package</strong> — Create distribution package via CPack</summary>
 
-```
-# Windows
-EMSDK=C:\path\to\emsdk
-QT_WASM_PATH=C:\Qt\6.8.3\wasm_singlethread
-QT_HOST_PATH=C:\Qt\6.8.3\msvc2022_64
+Generators: `ZIP`, `NSIS` (Windows installer), `IFW` (Qt Installer Framework)
 
-# Linux
-# EMSDK=/opt/emsdk
-# QT_WASM_PATH=/opt/Qt/6.8.3/wasm_singlethread
-# QT_HOST_PATH=/opt/Qt/6.8.3/gcc_64
-```
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Package release build (default: debug) |
+| `--all` | `-a` | bool | `False` | Package both debug and release |
+| `--platform` | `-p` | str | `native` | Build platform: `native` or `wasm` |
+| `--generator` | `-G` | str | — | CPack generator: `ZIP`, `NSIS`, `IFW` |
+| `--fresh` | | bool | `False` | Clean rebuild before packaging |
+| `--verbose` | `-v` | bool | `False` | Show full command output |
+| `--jobs` | `-j` | int | CPU count | Parallel build jobs |
+| `--arch` | `-A` | str | — | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | str | — | Exact Conan profile name |
 
 ```bash
-sbuild build --platform wasm            # WASM debug build
-sbuild build --platform wasm --release  # WASM release build
-sbuild serve --platform wasm            # HTTP server (port 8080)
-sbuild serve --platform wasm --https    # HTTPS server (port 8443)
+sbuild package --release                # Create all packages
+sbuild package --release -G NSIS        # Windows installer (.exe)
+sbuild package --release -G ZIP         # ZIP archive
+sbuild package --release --fresh        # Clean rebuild then package
 ```
 
-### Editor Integration
+</details>
 
-Pre-configured VS Code tasks are available in [`editors/vscode/tasks.json`](editors/vscode/tasks.json).
-Copy to your project's `.vscode/` directory.
+<details>
+<summary><strong>serve</strong> — Start development server for WASM testing</summary>
 
-Then use **Ctrl+Shift+B** for build tasks or **Ctrl+Shift+P** → *Tasks: Run Task* for all tasks.
+> **Note:** Requires `--platform wasm`.
 
-### Common options
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Serve release build (default: debug) |
+| `--platform` | `-p` | str | `native` | Must be set to `wasm` |
+| `--https` | | bool | `False` | Use HTTPS (default port 8443) |
+| `--port` | | int | — | Custom port (default: 8080 HTTP, 8443 HTTPS) |
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--release` | `-r` | Release build (default: debug) |
-| `--all` | `-a` | Process both debug and release |
-| `--platform` | `-p` | Build platform: `native` (default) or `wasm` |
-| `--verbose` | `-v` | Show full command output |
-| `--jobs` | `-j` | Parallel jobs (default: CPU count) |
-| `--build-number` | `-b` | Override build number |
-| `--cmake-args` | | Additional CMake arguments |
+```bash
+sbuild serve -p wasm                    # HTTP server on port 8080
+sbuild serve -p wasm --https            # HTTPS server on port 8443
+sbuild serve -p wasm --port 9000        # Custom port
+```
 
-## Target Project Structure
+</details>
 
-sbuild expects a specific layout in the consuming C++ project:
+<details>
+<summary><strong>test</strong> — Run unit tests via CTest</summary>
+
+> **Note:** Tests are not supported for WASM builds.
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--release` | `-r` | bool | `False` | Test release build (default: debug) |
+| `--platform` | `-p` | str | `native` | Build platform |
+| `--filter` | `-R` | str | — | Run tests matching regex pattern |
+| `--test-verbose` | | bool | `False` | Verbose CTest output |
+| `--rerun-failed` | | bool | `False` | Re-run only failed tests |
+| `--output-on-failure` | | bool | `True` | Show output on failure (disable with `--no-output-on-failure`) |
+| `--verbose` | `-v` | bool | `False` | Show full command output |
+| `--jobs` | `-j` | int | CPU count | Parallel test jobs |
+| `--arch` | `-A` | str | — | Target architecture: `x86`, `x64`, `arm64` |
+| `--profile` | | str | — | Exact Conan profile name |
+
+```bash
+sbuild test                             # Run all tests (debug)
+sbuild test --release                   # Run tests for release build
+sbuild test --filter "App.*"            # Run tests matching pattern
+sbuild test --rerun-failed              # Re-run only failed tests
+```
+
+</details>
+
+<details>
+<summary><strong>doctor</strong> — Check environment health</summary>
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--verbose` | `-v` | bool | `False` | Show tool paths and details |
+
+```bash
+sbuild doctor                           # Run all checks
+sbuild doctor -v                        # Show tool paths
+```
+
+</details>
+
+## Configuration
+
+### .env — Native builds
+
+Optional `KEY=VALUE` file for native build environment variables.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SBUILD_ARCH` | No | Default target architecture (`x86`, `x64`, `arm64`) — overridden by `--arch` |
+| `VCVARS_PATH` | No | Override auto-detection of `vcvarsall.bat` path |
+| `VCVARS_ARCH` | No | Override vcvarsall architecture argument (e.g. `amd64`, `amd64_x86`) |
+| `QT_IFW_ROOT` | No | Qt Installer Framework root (enables IFW packaging) |
+
+### .env.wasm — WebAssembly builds
+
+Required for WASM builds (`--platform wasm`).
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `EMSDK` | Yes | Path to Emscripten SDK |
+| `QT_WASM_PATH` | Yes | Path to Qt WASM kit (e.g. `C:\Qt\6.8.3\wasm_singlethread`) |
+| `QT_HOST_PATH` | Yes | Path to Qt host kit (e.g. `C:\Qt\6.8.3\msvc2022_64`) |
+| `OPENSSL` | No | Path to OpenSSL for WASM builds |
+
+### Resolution Priority
+
+**Architecture:**
+`CLI --arch` > `.env SBUILD_ARCH` > System env `SBUILD_ARCH` > Auto-detect
+
+**Conan profile:**
+`CLI --profile` (exact name) > `--arch` lookup (`{os}_{arch}_{build_type}`) > Default (`{os}_{build_type}`)
+
+**VCVARS_PATH** (Windows):
+`.env VCVARS_PATH` > System env `VCVARS_PATH` > Auto-detect from known VS install paths
+
+**VCVARS_ARCH** (Windows):
+`.env VCVARS_ARCH` > System env `VCVARS_ARCH` > Conan profile `arch=` mapping > Default `amd64`
+
+## Project Setup
+
+sbuild expects this layout in the consuming C++ project:
 
 ```
 my-project/
 ├── CMakeLists.txt              # Must contain project(Name VERSION x.y.z)
 ├── profiles/                   # Conan 2 profiles
-│   ├── windows_debug
+│   ├── windows_debug           # Default profiles (no arch qualifier)
 │   ├── windows_release
+│   ├── windows_x64_debug       # Arch-qualified profiles (optional)
+│   ├── windows_x64_release
 │   ├── linux_debug
 │   └── linux_release
 ├── .env                        # Native env vars (optional)
-├── .env.wasm                   # WASM env vars (optional, enables WASM builds)
-├── src/                        # Your source code
-│   └── ...
-└── CMakeUserPresets.json       # Auto-generated by `sbuild configure` (via Conan)
+├── .env.wasm                   # WASM env vars (required for WASM builds)
+├── src/
+└── CMakeUserPresets.json       # Auto-generated by sbuild configure (via Conan)
 ```
 
 ### CMakeLists.txt
 
-Must contain a `project()` directive with a version:
+Must contain a `project()` directive with a version. sbuild parses this to determine the project name and version for packaging.
 
 ```cmake
 project(MyApp VERSION 1.2.3)
 ```
 
-sbuild parses this to determine the project name and version for packaging.
+### Conan Profiles
 
-### Conan profiles
+Place profiles in `profiles/` using the naming convention `{os}_{build_type}` (e.g. `windows_debug`, `linux_release`). For cross-compilation, use `{os}_{arch}_{build_type}` (e.g. `windows_x64_debug`) and select with `--arch`. Use `--profile` to bypass naming conventions and select a profile by exact name.
 
-Place Conan 2 profiles in a `profiles/` directory using the naming convention `{os}_{build_type}`:
+The CMake generator can be configured per-profile via Conan's `[conf]` section (e.g. `tools.cmake.cmaketoolchain:generator=Ninja`). If unset, Conan uses the system default.
 
-- `profiles/windows_debug`, `profiles/windows_release`
-- `profiles/linux_debug`, `profiles/linux_release`
+### CMake Presets
 
-### .env (native builds)
+`sbuild configure` runs Conan, which generates `CMakeUserPresets.json`. sbuild auto-detects preset names:
 
-Optional `KEY=VALUE` file for native build environment variables:
+- **Single-config generators** (Ninja, Unix Makefiles): `conan-debug` / `conan-release`
+- **Multi-config generators** (Visual Studio): `conan-default` configure preset with `conan-debug` / `conan-release` build presets
+- **WASM**: `wasm-debug` / `wasm-release`
 
-```
-VCVARS_PATH=C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat
-QT_IFW_ROOT=C:\Qt\Tools\QtInstallerFramework\4.8
-```
+### Build Output
 
-`VCVARS_PATH` overrides auto-detection of the Visual Studio environment script.
+- `build/Debug`, `build/Release` — native (no arch)
+- `build/x64/Debug`, `build/x64/Release` — native with `--arch`
+- `build/wasm-debug`, `build/wasm-release` — WASM
+- `build_logs/` — build logs with automatic rotation (keeps last 10)
 
-### .env.wasm (WebAssembly builds)
+### Editor Integration
 
-Required for WASM builds. Must define at minimum:
+Pre-configured VS Code tasks are available in [`editors/vscode/tasks.json`](editors/vscode/tasks.json). Copy to your project's `.vscode/` directory and use **Ctrl+Shift+B** for build tasks.
 
-```
-EMSDK=C:\path\to\emsdk
-QT_WASM_PATH=C:\Qt\6.8.3\wasm_singlethread
-QT_HOST_PATH=C:\Qt\6.8.3\msvc2022_64
-```
+## Troubleshooting
 
-Optional: `OPENSSL` for OpenSSL support in WASM builds.
+Run `sbuild doctor` to diagnose environment issues. It checks five categories:
 
-### CMake presets
+| Category | What it checks |
+|----------|---------------|
+| **Core Tools** | Python version, virtual env, CMake, Conan (version 2), Git, Ninja |
+| **Native Environment** | Architecture, `.env` file, Conan profiles, vcvarsall.bat (Windows) or GCC (Linux) |
+| **WASM Environment** | `.env.wasm`, EMSDK path, emsdk_env script, Qt WASM/host paths, OpenSSL |
+| **Project Configuration** | `CMakeLists.txt` parsing, CMake presets (both single-config and multi-config) |
+| **Packaging Tools** | CPack, Qt IFW, NSIS (Windows) |
 
-`sbuild configure` runs Conan, which generates `CMakeUserPresets.json`. A manually maintained `CMakePresets.json` may also be present. The expected preset names are:
+### Common Issues
 
-- Native: `conan-debug`, `conan-release`
-- WASM: `wasm-debug`, `wasm-release`
-
-### Build output
-
-Build artifacts are written to subdirectories under `build/`:
-
-- `build/Debug`, `build/Release` (native)
-- `build/wasm-debug`, `build/wasm-release` (WASM)
-
-Build logs are saved to `build_logs/` with automatic rotation (keeps last 10).
-
-## Project conventions
-
-sbuild auto-detects project settings from the working directory:
-
-- **Project name/version**: Parsed from `CMakeLists.txt` (`project(name VERSION x.y.z)`)
-- **Conan profiles**: Looked up in `profiles/` (e.g. `profiles/windows_debug`)
-- **Environment variables**: Loaded from `.env` (native) and `.env.wasm` (WebAssembly)
-- **vcvars64 override**: Set `VCVARS_PATH` in `.env` or as an environment variable to override auto-detection
-- **Build output**: Written to `build/Debug`, `build/Release`, or `build/wasm-debug`
-- **Build logs**: Saved to `build_logs/` with automatic rotation (keeps last 10)
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| vcvarsall.bat not found | Visual Studio not installed or not detected | Install VS 2019/2022 with C++ workload, or set `VCVARS_PATH` in `.env` |
+| Conan profile not found | Missing `profiles/` directory or misnamed profile | Create `profiles/{os}_{build_type}` (e.g. `profiles/windows_debug`) |
+| WASM config missing | `.env.wasm` not found or incomplete | Create `.env.wasm` with `EMSDK`, `QT_WASM_PATH`, `QT_HOST_PATH` |
+| CMake presets not found | First build not yet configured | Run `sbuild configure` to generate presets via Conan |
+| Conan version mismatch | Conan 1.x installed instead of 2.x | Upgrade with `pip install --upgrade conan` |
+| Tests not supported | Running `sbuild test` with `--platform wasm` | Tests are only supported for native builds |
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0 or later](https://www.gnu.org/licenses/gpl-3.0.html) (GPL-3.0-or-later).
+[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html)

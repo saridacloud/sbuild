@@ -14,7 +14,7 @@ class PlatformEnv(ABC):
     @property
     @abstractmethod
     def toolchain_path(self) -> Path | None:
-        """Platform toolchain path (e.g. vcvars64.bat), or None if not found."""
+        """Platform toolchain path (e.g. vcvarsall.bat), or None if not found."""
 
     @abstractmethod
     def activate(

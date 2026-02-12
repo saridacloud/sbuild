@@ -40,6 +40,8 @@ class BuildSession:
         cmake_args: Optional[str] = None,
         build_number: Optional[int] = None,
         project_root: Optional[Path] = None,
+        arch: Optional[str] = None,
+        profile: Optional[str] = None,
     ):
         """Initialize build session.
 
@@ -51,6 +53,8 @@ class BuildSession:
             cmake_args: Additional CMake arguments
             build_number: Override build number
             project_root: Project root directory (auto-detected if None)
+            arch: Target architecture (x86, x64, arm64)
+            profile: Exact Conan profile name override
         """
         self.platform = platform
         self.build_type = build_type.capitalize()
@@ -58,6 +62,8 @@ class BuildSession:
         self.jobs = jobs
         self.cmake_args = cmake_args
         self.build_number = build_number
+        self.arch = arch
+        self.profile = profile
 
         # Auto-detect project root if not provided
         if project_root is None:
@@ -87,6 +93,10 @@ class BuildSession:
         self.log_manager.write(f"Build type: {self.build_type}")
         self.log_manager.write(f"Jobs: {self.jobs}")
         self.log_manager.write(f"Verbose: {self.verbose}")
+        if self.arch:
+            self.log_manager.write(f"Arch: {self.arch}")
+        if self.profile:
+            self.log_manager.write(f"Profile: {self.profile}")
         if self.build_number is not None:
             self.log_manager.write(f"Build number: {self.build_number}")
         if self.cmake_args:
@@ -101,6 +111,8 @@ class BuildSession:
             jobs=self.jobs,
             cmake_args=self.cmake_args,
             build_number=self.build_number,
+            arch=self.arch,
+            profile=self.profile,
         )
 
         return self
@@ -170,9 +182,15 @@ class BuildSession:
             if display
             else ""
         )
+
+        # Show target architecture for native builds
+        arch_str = ""
+        if hasattr(self.config.platform_config, "target_arch"):
+            arch_str = f" - {self.config.platform_config.target_arch}"
+
         self.console.print(
             Panel(
-                f"{self.config.project_name} - {action.capitalize()} ({mode}{platform_str})",
+                f"{self.config.project_name} - {action.capitalize()} ({mode}{platform_str}{arch_str})",
                 expand=False,
             )
         )

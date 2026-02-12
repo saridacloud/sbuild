@@ -43,6 +43,8 @@ AllConfigsOpt = Annotated[bool, typer.Option("--all", "-a", help="Process both d
 PlatformOpt = Annotated[str, typer.Option("--platform", "-p", help="Build platform (native or wasm)")]
 VerboseOpt = Annotated[bool, typer.Option("--verbose", "-v", help="Show command output")]
 JobsOpt = Annotated[int, typer.Option("--jobs", "-j", help="Parallel jobs")]
+ArchOpt = Annotated[Optional[str], typer.Option("--arch", "-A", help="Target architecture (x86, x64, arm64)")]
+ProfileOpt = Annotated[Optional[str], typer.Option("--profile", help="Exact Conan profile name (overrides --arch)")]
 
 
 def _get_build_types(all_configs: bool, release: bool) -> list[str]:
@@ -61,14 +63,19 @@ def _do_build(
     cmake_args: Optional[str],
     clean_first: bool = False,
     always_configure: bool = False,
+    arch: Optional[str] = None,
+    profile: Optional[str] = None,
 ):
     """Execute build action.
 
     Args:
         clean_first: Always clean before building
         always_configure: Always run configure step (not just when build dir is missing)
+        arch: Target architecture (x86, x64, arm64)
+        profile: Exact Conan profile name override
     """
-    with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number) as session:
+    with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number,
+                      arch=arch, profile=profile) as session:
         action = "rebuild" if (clean_first and always_configure) else "build"
         session.show_header(action)
 
@@ -108,6 +115,8 @@ def main(
     verbose: VerboseOpt = False,
     build_number: Annotated[Optional[int], typer.Option("--build-number", "-b", help="Override build number")] = None,
     cmake_args: Annotated[Optional[str], typer.Option("--cmake-args", help="Additional CMake arguments")] = None,
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
     version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit",
                                           callback=_version_callback, is_eager=True)] = False,
 ):
@@ -115,7 +124,8 @@ def main(
     if ctx.invoked_subcommand is None:
         # Default to build command
         build_type = "release" if release else "debug"
-        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=clean)
+        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args,
+                  clean_first=clean, arch=arch, profile=profile)
 
 
 @app.command()
@@ -128,6 +138,8 @@ def build(
     verbose: VerboseOpt = False,
     build_number: Annotated[Optional[int], typer.Option("--build-number", "-b", help="Override build number")] = None,
     cmake_args: Annotated[Optional[str], typer.Option("--cmake-args", help="Additional CMake arguments")] = None,
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
 ):
     """
     Incremental build (default action).
@@ -141,18 +153,23 @@ def build(
       [cyan]sbuild build -r -v[/cyan]              Release build with verbose output
       [cyan]sbuild build -p wasm[/cyan]            WebAssembly debug build
 
-    [bold]Cross-compilation (Windows):[/bold]
+    [bold]Cross-compilation:[/bold]
+
+      [cyan]sbuild build --arch x86[/cyan]          Cross-compile for x86 (uses profiles/windows_x86_debug)
+      [cyan]sbuild build --arch x64[/cyan]          Explicit x64 (uses profiles/windows_x64_debug)
+      [cyan]sbuild build --profile custom[/cyan]    Use exact profile name from profiles/
+
+      When [cyan]--arch[/cyan] is specified, sbuild looks for [cyan]profiles/{os}_{arch}_{build_type}[/cyan].
+      Without [cyan]--arch[/cyan], it uses [cyan]profiles/{os}_{build_type}[/cyan] (default behavior).
+      Set [cyan]SBUILD_ARCH[/cyan] in [cyan].env[/cyan] or as env var for CI ([cyan]--arch[/cyan] takes precedence).
 
       The MSVC toolchain architecture is auto-detected from the Conan profile's
-      [cyan]arch=[/cyan] setting (e.g. [cyan]arch=x86[/cyan] in profiles/windows_debug activates
-      the x86 cross-compiler via vcvarsall.bat).
-
-      Override manually with [cyan]VCVARS_ARCH[/cyan] in .env (values: amd64, amd64_x86,
-      amd64_arm64, amd64_arm).
+      [cyan]arch=[/cyan] setting. Override manually with [cyan]VCVARS_ARCH[/cyan] in .env.
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
-        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args, clean_first=clean)
+        _do_build(platform, build_type, jobs, verbose, build_number, cmake_args,
+                  clean_first=clean, arch=arch, profile=profile)
 
 
 @app.command()
@@ -164,6 +181,8 @@ def rebuild(
     verbose: VerboseOpt = False,
     build_number: Annotated[Optional[int], typer.Option("--build-number", "-b", help="Override build number")] = None,
     cmake_args: Annotated[Optional[str], typer.Option("--cmake-args", help="Additional CMake arguments")] = None,
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
 ):
     """
     Clean + full rebuild (conan install + cmake configure + build).
@@ -173,17 +192,21 @@ def rebuild(
       [cyan]sbuild rebuild[/cyan]                  Full debug rebuild
       [cyan]sbuild rebuild --release[/cyan]        Full release rebuild
       [cyan]sbuild rebuild --all[/cyan]            Rebuild both debug and release
+      [cyan]sbuild rebuild --arch x64[/cyan]       Rebuild for x64 architecture
     """
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
         _do_build(platform, build_type, jobs, verbose, build_number,
-                  cmake_args, clean_first=True, always_configure=True)
+                  cmake_args, clean_first=True, always_configure=True,
+                  arch=arch, profile=profile)
 
 
 @app.command()
 def clean(
     release: ReleaseOpt = False,
     platform: PlatformOpt = "native",
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
 ):
     """
     Remove build artifacts.
@@ -192,10 +215,11 @@ def clean(
 
       [cyan]sbuild clean[/cyan]                    Clean debug build
       [cyan]sbuild clean --release[/cyan]          Clean release build
+      [cyan]sbuild clean --arch x64[/cyan]         Clean x64 debug build
     """
     build_type = "release" if release else "debug"
 
-    with BuildSession(platform, build_type) as session:
+    with BuildSession(platform, build_type, arch=arch, profile=profile) as session:
         session.show_header("clean")
 
         if session.runner.clean():
@@ -212,6 +236,8 @@ def configure(
     verbose: VerboseOpt = False,
     build_number: Annotated[Optional[int], typer.Option("--build-number", "-b", help="Override build number")] = None,
     cmake_args: Annotated[Optional[str], typer.Option("--cmake-args", help="Additional CMake arguments")] = None,
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
 ):
     """
     Reconfigure without building (conan install + cmake configure).
@@ -220,11 +246,13 @@ def configure(
 
       [cyan]sbuild configure[/cyan]                Configure debug
       [cyan]sbuild configure --release[/cyan]      Configure release
+      [cyan]sbuild configure --arch x64[/cyan]     Configure for x64 architecture
       [cyan]sbuild configure --cmake-args "-DENABLE_FEATURE=ON"[/cyan]
     """
     build_type = "release" if release else "debug"
 
-    with BuildSession(platform, build_type, verbose, cmake_args=cmake_args, build_number=build_number) as session:
+    with BuildSession(platform, build_type, verbose, cmake_args=cmake_args, build_number=build_number,
+                      arch=arch, profile=profile) as session:
         session.show_header("configure")
 
         if session.runner.configure():
@@ -241,6 +269,8 @@ def install(
     prefix: Annotated[Optional[Path], typer.Option(help="Installation prefix")] = None,
     component: Annotated[Optional[str], typer.Option(help="Component to install")] = None,
     system_install: Annotated[bool, typer.Option("--system-install", help="Install to system location")] = False,
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
 ):
     """
     Install built project.
@@ -253,7 +283,7 @@ def install(
     """
     build_type = "release" if release else "debug"
 
-    with BuildSession(platform, build_type) as session:
+    with BuildSession(platform, build_type, arch=arch, profile=profile) as session:
         if session.runner.install(prefix, component, system_install):
             session.console.print("\n[green]Install complete![/green]")
         else:
@@ -271,6 +301,8 @@ def package(
     fresh: Annotated[bool, typer.Option("--fresh", help="Clean rebuild before packaging")] = False,
     jobs: JobsOpt = DEFAULT_JOBS,
     verbose: VerboseOpt = False,
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
 ):
     """
     Create distribution package using CPack.
@@ -289,9 +321,10 @@ def package(
     build_types = _get_build_types(all_configs, release)
     for build_type in build_types:
         if fresh:
-            _do_build(platform, build_type, jobs, verbose, None, None, clean_first=True, always_configure=True)
+            _do_build(platform, build_type, jobs, verbose, None, None,
+                      clean_first=True, always_configure=True, arch=arch, profile=profile)
 
-        with BuildSession(platform, build_type) as session:
+        with BuildSession(platform, build_type, arch=arch, profile=profile) as session:
             if session.runner.package(generator):
                 session.console.print("\n[green]Package created![/green]")
             else:
@@ -365,6 +398,8 @@ def test(
         "--output-on-failure/--no-output-on-failure", help="Show output on failure")] = True,
     jobs: JobsOpt = DEFAULT_JOBS,
     verbose: VerboseOpt = False,
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
 ):
     """
     Run unit tests via CTest.
@@ -380,7 +415,7 @@ def test(
     """
     build_type = "release" if release else "debug"
 
-    with BuildSession(platform, build_type, verbose, jobs) as session:
+    with BuildSession(platform, build_type, verbose, jobs, arch=arch, profile=profile) as session:
         if not session.runner.supports_tests:
             console.print("[red]Error: Tests are not supported for this platform[/red]")
             raise typer.Exit(1)

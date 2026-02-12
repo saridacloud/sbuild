@@ -43,7 +43,7 @@ class WasmRunner(BaseRunner):
 
         if IS_WINDOWS and not self._platform.toolchain_path:
             console.print(
-                "[yellow]Warning: vcvars64.bat not found. cmake may not be available.[/yellow]"
+                "[yellow]Warning: vcvarsall.bat not found. cmake may not be available.[/yellow]"
             )
 
         self._env = self._platform.activate(extra_scripts=[emsdk_script], base_env=env)
@@ -61,7 +61,7 @@ class WasmRunner(BaseRunner):
 
     def build(self) -> bool:
         """Build the WASM project"""
-        cmd = f"cmake --build --preset {self.config.preset_name} -j{self.config.jobs}"
+        cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building WASM {self.config.build_type}")
 
     def serve(self, https: bool = False, port: Optional[int] = None, **kwargs) -> None:
@@ -90,7 +90,7 @@ class WasmRunner(BaseRunner):
         if self.config.verbose:
             if self._platform.toolchain_path:
                 console.print(
-                    f"[green]vcvars64:[/green] [dim]{self._platform.toolchain_path}[/dim]"
+                    f"[green]vcvarsall:[/green] [dim]{self._platform.toolchain_path}[/dim]"
                 )
             console.print(
                 f"[green]EMSDK:[/green] [dim]{self._wasm_config.emsdk_path}[/dim]"

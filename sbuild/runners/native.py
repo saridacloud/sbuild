@@ -58,13 +58,30 @@ class NativeRunner(BaseRunner):
     def configure(self) -> bool:
         """Run conan install + cmake configure"""
         arch = self._native_config.arch
+        profile_path = self._native_config.conan_profile_path
+
+        # Validate explicit --profile or --arch when profile file doesn't exist
+        if self._native_config.profile_override and not profile_path:
+            from ..exceptions import ConfigError
+            profiles_dir = self.config.project_root / "profiles"
+            available = [p.name for p in profiles_dir.iterdir()] if profiles_dir.exists() else []
+            raise ConfigError(
+                f"Profile not found: profiles/{self._native_config.profile_override}\n"
+                f"Available profiles: {', '.join(available) if available else '(none)'}"
+            )
+        if self._native_config.requested_arch and not self._native_config.profile_override and not profile_path:
+            from ..exceptions import ConfigError
+            os_name = "windows" if self.config.is_windows else "linux"
+            expected = f"{os_name}_{self._native_config.requested_arch}_{self.config.build_type.lower()}"
+            profiles_dir = self.config.project_root / "profiles"
+            available = [p.name for p in profiles_dir.iterdir()] if profiles_dir.exists() else []
+            raise ConfigError(
+                f"Arch-qualified profile not found: profiles/{expected}\n"
+                f"Available profiles: {', '.join(available) if available else '(none)'}"
+            )
 
         # Install dependencies with Conan
-        # Use project-specific profile if it exists
-        os_name = "windows" if self.config.is_windows else "linux"
-        profile_path = self.config.project_root / "profiles" / f"{os_name}_{self.config.build_type.lower()}"
-
-        if profile_path.exists():
+        if profile_path and profile_path.exists():
             cmd = f"conan install . --profile:all={profile_path} --build=missing"
             if self.log_manager:
                 self.log_manager.write(f"Using project profile: {profile_path}")
@@ -87,7 +104,7 @@ class NativeRunner(BaseRunner):
 
     def build(self) -> bool:
         """Build the project"""
-        cmd = f"cmake --build --preset {self.config.preset_name} -j{self.config.jobs}"
+        cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building {self.config.build_type}")
 
     def show_setup_info(self) -> None:
@@ -113,6 +130,18 @@ class NativeRunner(BaseRunner):
             console.print(
                 f"[green]Detected architecture:[/green] [dim]{self._native_config.arch}[/dim]"
             )
+            if self._native_config.requested_arch:
+                console.print(
+                    f"[green]Requested arch:[/green] [dim]{self._native_config.requested_arch}[/dim]"
+                )
+            if self._native_config.profile_override:
+                console.print(
+                    f"[green]Profile override:[/green] [dim]{self._native_config.profile_override}[/dim]"
+                )
+            if self._native_config.conan_profile_path:
+                console.print(
+                    f"[green]Conan profile:[/green] [dim]{self._native_config.conan_profile_path}[/dim]"
+                )
 
             # Show loaded environment variables from .env
             if self._native_config.env_vars:
