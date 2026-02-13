@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-02-13
+
 ### Added
 
 - Cache `vcvarsall.bat` captured environment to `.sbuild/vcvars_cache.pkl` — eliminates ~3-5s subprocess overhead on repeat builds
 - Auto-invalidation on vcvarsall.bat modification or architecture change; manual clear via `rmdir .sbuild`
 - `cache_hit` property on `WindowsEnv` for verbose-mode cache status reporting
+- Execution time profiling for build session and individual runner steps — total elapsed time displayed at end of session
 - Tests for cache miss/hit, fingerprint invalidation, corrupt cache fallback, and auto-directory creation
 - "Environment Caching (Windows)" section in README
 
@@ -21,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `NativeRunner` passes `cache_dir=config.project_root` to platform activation
 - `sbuild doctor` passes `cache_dir=self.project_root` to platform activation
 - Verbose mode now shows vcvars environment cache status (loaded from cache / captured)
+- VS Code tasks updated to use `process` type with faster execution times and enhanced presentation options
 
 ## [1.1.0] - 2026-02-12
 
@@ -136,7 +140,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment variable loading from `.env` (native) and `.env.wasm` (WebAssembly)
 - Build number auto-detection from git commit count or `version.h`
 
-[Unreleased]: https://github.com/saridacloud/sbuild/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/saridacloud/sbuild/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/saridacloud/sbuild/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/saridacloud/sbuild/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/saridacloud/sbuild/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/saridacloud/sbuild/releases/tag/v1.0.0
