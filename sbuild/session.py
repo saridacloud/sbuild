@@ -7,6 +7,7 @@ console output, error handling, and runner instantiation.
 
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -78,8 +79,15 @@ class BuildSession:
         self.console: Optional[LoggingConsole] = None
         self._runner: Optional["BaseRunner"] = None
 
+        # Profiling timers
+        self._session_start: float | None = None
+        self._config_elapsed: float | None = None
+        self._runner_elapsed: float | None = None
+
     def __enter__(self) -> "BuildSession":
         """Set up logging and create build configuration."""
+        self._session_start = time.perf_counter()
+
         # Initialize log manager
         self.log_manager = LogManager(self.project_root)
         self.log_path = self.log_manager.start_logging()
@@ -102,7 +110,8 @@ class BuildSession:
         if self.cmake_args:
             self.log_manager.write(f"CMake args: {self.cmake_args}")
 
-        # Create build configuration
+        # Create build configuration (timed)
+        t0 = time.perf_counter()
         self.config = BuildConfig(
             project_root=self.project_root,
             build_type=self.build_type,
@@ -114,6 +123,7 @@ class BuildSession:
             arch=self.arch,
             profile=self.profile,
         )
+        self._config_elapsed = time.perf_counter() - t0
 
         return self
 
@@ -151,7 +161,9 @@ class BuildSession:
     def runner(self) -> "BaseRunner":
         """Get the appropriate runner for the platform (lazy initialization)."""
         if self._runner is None:
+            t0 = time.perf_counter()
             self._runner = self._create_runner()
+            self._runner_elapsed = time.perf_counter() - t0
         return self._runner
 
     def _create_runner(self) -> "BaseRunner":
@@ -194,7 +206,18 @@ class BuildSession:
                 expand=False,
             )
         )
-        self.console.print(f"[dim]Log file: {self.log_path}[/dim]\n")
+        self.console.print(f"[dim]Log file: {self.log_path}[/dim]")
+
+        if self.verbose:
+            parts = []
+            if self._config_elapsed is not None:
+                parts.append(f"config: {self._config_elapsed:.2f}s")
+            if self._runner_elapsed is not None:
+                parts.append(f"init: {self._runner_elapsed:.2f}s")
+            if parts:
+                self.console.print(f"[dim]Profiling: {', '.join(parts)}[/dim]")
+
+        self.console.print()
 
     def show_success(self, action: str) -> None:
         """Display success message."""
@@ -207,6 +230,9 @@ class BuildSession:
             )
         else:
             self.console.print(f"\n[green]{action.capitalize()} complete![/green]")
+        if self._session_start is not None:
+            total = time.perf_counter() - self._session_start
+            self.console.print(f"[dim]Total time: {total:.2f}s[/dim]")
         self.console.print(f"[dim]Log saved to: {self.log_path}[/dim]")
 
     def show_failure(self, action: str) -> None:
@@ -215,6 +241,9 @@ class BuildSession:
             return
 
         self.console.print(f"\n[red]{action.capitalize()} failed![/red]")
+        if self._session_start is not None:
+            total = time.perf_counter() - self._session_start
+            self.console.print(f"[dim]Total time: {total:.2f}s[/dim]")
         self.console.print(f"[yellow]Check log for details: {self.log_path}[/yellow]")
 
     def exit_with_error(self, code: int = 1) -> None:
