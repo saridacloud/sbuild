@@ -362,10 +362,10 @@ class BaseRunner(ABC):
             self.log_manager.write(f"Execution time: {elapsed:.2f}s")
 
         if result.returncode == 0:
-            console.print(f"[green][OK][/green] {description}")
+            console.print(f"[green][OK][/green] {description} [dim]({elapsed:.1f}s)[/dim]")
             return True
         else:
-            console.print(f"[red][FAIL][/red] {description}")
+            console.print(f"[red][FAIL][/red] {description} [dim]({elapsed:.1f}s)[/dim]")
             return False
 
     def _run_with_panel(
@@ -411,10 +411,10 @@ class BaseRunner(ABC):
                 self.log_manager.write(f"Execution time: {elapsed:.2f}s")
 
             if return_code == 0:
-                console.print(f"[green][OK][/green] {description}")
+                console.print(f"[green][OK][/green] {description} [dim]({elapsed:.1f}s)[/dim]")
                 return True
             else:
-                console.print(f"[red][FAIL][/red] {description}")
+                console.print(f"[red][FAIL][/red] {description} [dim]({elapsed:.1f}s)[/dim]")
                 self._show_error_output(all_output)
                 return False
 

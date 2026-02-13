@@ -59,7 +59,7 @@ class DoctorReport:
         self._platform = create_platform_env()
         if self._platform.toolchain_path:
             try:
-                self._vcvars_env = self._platform.activate()
+                self._vcvars_env = self._platform.activate(cache_dir=self.project_root)
             except Exception:
                 pass
 

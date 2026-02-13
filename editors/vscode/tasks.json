@@ -9,6 +9,12 @@
     // Tasks ending with "..." will prompt you for options via Quick Pick dialogs.
     //
     // Commands use .venv paths. Adjust if your virtual environment is elsewhere.
+    //
+    // Recommended VS Code settings for faster task execution (add to .vscode/settings.json):
+    //   "terminal.integrated.automationProfile.windows": {
+    //       "path": "cmd.exe",
+    //       "args": ["/d"]
+    //   }
     "version": "2.0.0",
     "tasks": [
         // =====================================================
@@ -16,7 +22,7 @@
         // =====================================================
         {
             "label": "Build: Debug",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -29,12 +35,17 @@
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Build: Release",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -44,12 +55,17 @@
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Build: Debug (Clean First)",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -59,12 +75,17 @@
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Build: Release (Clean First)",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -74,12 +95,17 @@
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Rebuild: Debug (Full)",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -89,12 +115,17 @@
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Rebuild: Release (Full)",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -104,12 +135,17 @@
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Rebuild: All (Debug + Release)",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -119,12 +155,17 @@
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Install: Debug",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -134,12 +175,17 @@
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Install: Release",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -149,12 +195,17 @@
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
         {
             "label": "Package: Release NSIS (Fresh Build)",
-            "type": "shell",
+            "type": "process",
             "command": "${workspaceFolder}/.venv/bin/sbuild",
             "windows": {
                 "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
@@ -164,7 +215,12 @@
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
+            },
+            "runOptions": {
+                "reevaluateOnRerun": false
             }
         },
 
@@ -176,12 +232,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -190,12 +254,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -204,12 +276,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild clean ${input:configDR} ${input:platform} ${input:arch}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe clean ${input:configDR} ${input:platform} ${input:arch}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe clean ${input:configDR} ${input:platform} ${input:arch}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "build",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -218,12 +298,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "build",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -232,12 +320,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "build",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -246,12 +342,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "test",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -260,12 +364,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "test",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -274,12 +386,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "build",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         },
@@ -288,13 +408,21 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "build",
             "isBackground": true,
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "dedicated"
             }
         },
@@ -303,12 +431,20 @@
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/sbuild doctor ${input:doctorVerbose}",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe doctor ${input:doctorVerbose}"
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe doctor ${input:doctorVerbose}",
+                "options": {
+                    "shell": {
+                        "executable": "cmd.exe",
+                        "args": ["/d", "/c"]
+                    }
+                }
             },
             "group": "none",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
+                "echo": false,
+                "showReuseMessage": false,
                 "panel": "shared"
             }
         }
