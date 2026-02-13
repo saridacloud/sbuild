@@ -5,6 +5,7 @@ Build runner for native (conan + cmake) builds with vcvarsall.bat support on Win
 """
 
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -45,7 +46,9 @@ class NativeRunner(BaseRunner):
             env_overrides=native_config.env_vars,
             target_arch=native_config.target_arch,
         )
+        t0 = time.perf_counter()
         self._env = self._platform.activate(base_env=self._env, cache_dir=config.project_root)
+        self._activate_elapsed = time.perf_counter() - t0
 
     def _get_command_env(self) -> Optional[dict[str, str]]:
         """Get environment variables for command execution"""
@@ -126,6 +129,9 @@ class NativeRunner(BaseRunner):
                         console.print(
                             "[green]vcvars env:[/green] [dim]captured (cache updated)[/dim]"
                         )
+                    console.print(
+                        f"[green]vcvars activation:[/green] [dim]{self._activate_elapsed:.2f}s[/dim]"
+                    )
             else:
                 console.print(
                     "[yellow]Warning: Visual Studio vcvarsall.bat not found. Build may fail.[/yellow]"
