@@ -34,6 +34,14 @@ class BaseRunner(ABC):
         self.config = config
         self.log_manager = log_manager
 
+    def get_config_summary(self) -> dict[str, list[tuple[str, str]]]:
+        """Return runner-specific configuration as grouped key-value pairs.
+
+        Returns a dict mapping section names to ordered lists of (label, value) tuples.
+        Subclasses override to add platform-specific info.
+        """
+        return {}
+
     @abstractmethod
     def configure(self) -> bool:
         """Configure the build (cmake configure step)"""

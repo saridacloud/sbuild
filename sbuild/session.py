@@ -13,6 +13,7 @@ from typing import Optional, TYPE_CHECKING
 
 from rich.panel import Panel
 
+from . import __version__
 from .config import BuildConfig
 from .console import console as base_console
 from .exceptions import BuildError, ConfigError
@@ -96,7 +97,7 @@ class BuildSession:
         self.console = LoggingConsole(base_console, self.log_manager)
 
         # Log configuration
-        self.log_manager.write_section("Build Configuration")
+        self.log_manager.write_section("CLI Parameters")
         self.log_manager.write(f"Platform: {self.platform}")
         self.log_manager.write(f"Build type: {self.build_type}")
         self.log_manager.write(f"Jobs: {self.jobs}")
@@ -164,6 +165,7 @@ class BuildSession:
             t0 = time.perf_counter()
             self._runner = self._create_runner()
             self._runner_elapsed = time.perf_counter() - t0
+            self._log_resolved_config()
         return self._runner
 
     def _create_runner(self) -> "BaseRunner":
@@ -178,12 +180,84 @@ class BuildSession:
             raise ConfigError(f"Unknown platform: {self.platform}")
         return runner_cls(self.config, self.log_manager)
 
+    def _log_resolved_config(self) -> None:
+        """Write full resolved configuration to log file."""
+        if self.log_manager is None or self.config is None or self._runner is None:
+            return
+
+        self.log_manager.write_section("Resolved Configuration")
+
+        # General info
+        self.log_manager.write(f"  sbuild version: {__version__}")
+        self.log_manager.write(f"  Project: {self.config.project_name} {self.config.version}")
+        self.log_manager.write(f"  Project root: {self.config.project_root}")
+        self.log_manager.write(f"  Platform: {self.platform}")
+        self.log_manager.write(f"  Build type: {self.build_type}")
+        self.log_manager.write(f"  Jobs: {self.jobs}")
+        self.log_manager.write(f"  Build directory: {self.config.build_dir}")
+        self.log_manager.write(f"  Configure preset: {self.config.preset_name}")
+        self.log_manager.write(f"  Build preset: {self.config.build_preset_name}")
+        if self.cmake_args:
+            self.log_manager.write(f"  CMake args: {self.cmake_args}")
+        if self.build_number is not None:
+            self.log_manager.write(f"  Build number: {self.build_number}")
+
+        # Profiling
+        if self._config_elapsed is not None:
+            self.log_manager.write(f"  Config creation: {self._config_elapsed:.2f}s")
+        if self._runner_elapsed is not None:
+            self.log_manager.write(f"  Runner init: {self._runner_elapsed:.2f}s")
+
+        # Runner-specific sections
+        for section_name, items in self._runner.get_config_summary().items():
+            self.log_manager.write_section(section_name)
+            for label, value in items:
+                self.log_manager.write(f"  {label}: {value}")
+
+    def _show_config_console(self) -> None:
+        """Print resolved configuration to console with Rich markup."""
+        if self.config is None or self._runner is None:
+            return
+
+        # General info
+        base_console.print(f"[green]sbuild version:[/green] [dim]{__version__}[/dim]")
+        base_console.print(
+            f"[green]Project:[/green] [dim]{self.config.project_name} {self.config.version}[/dim]"
+        )
+        base_console.print(f"[green]Project root:[/green] [dim]{self.config.project_root}[/dim]")
+        base_console.print(f"[green]Build directory:[/green] [dim]{self.config.build_dir}[/dim]")
+        base_console.print(
+            f"[green]Configure preset:[/green] [dim]{self.config.preset_name}[/dim]"
+        )
+        base_console.print(
+            f"[green]Build preset:[/green] [dim]{self.config.build_preset_name}[/dim]"
+        )
+        if self.cmake_args:
+            base_console.print(f"[green]CMake args:[/green] [dim]{self.cmake_args}[/dim]")
+        if self.build_number is not None:
+            base_console.print(f"[green]Build number:[/green] [dim]{self.build_number}[/dim]")
+
+        # Profiling
+        parts = []
+        if self._config_elapsed is not None:
+            parts.append(f"config: {self._config_elapsed:.2f}s")
+        if self._runner_elapsed is not None:
+            parts.append(f"init: {self._runner_elapsed:.2f}s")
+        if parts:
+            base_console.print(f"[green]Profiling:[/green] [dim]{', '.join(parts)}[/dim]")
+
+        # Runner-specific sections
+        for section_name, items in self._runner.get_config_summary().items():
+            base_console.print(f"[bold]{section_name}:[/bold]")
+            for label, value in items:
+                base_console.print(f"  [green]{label}:[/green] [dim]{value}[/dim]")
+
     def show_header(self, action: str) -> None:
         """Display build header with action and configuration."""
         if self.config is None or self.console is None:
             return
 
-        # Show setup info if runner has it
+        # Show critical warnings from runner (e.g. vcvarsall not found)
         if hasattr(self.runner, "show_setup_info"):
             self.runner.show_setup_info()
 
@@ -209,13 +283,7 @@ class BuildSession:
         self.console.print(f"[dim]Log file: {self.log_path}[/dim]")
 
         if self.verbose:
-            parts = []
-            if self._config_elapsed is not None:
-                parts.append(f"config: {self._config_elapsed:.2f}s")
-            if self._runner_elapsed is not None:
-                parts.append(f"init: {self._runner_elapsed:.2f}s")
-            if parts:
-                self.console.print(f"[dim]Profiling: {', '.join(parts)}[/dim]")
+            self._show_config_console()
 
         self.console.print()
 

@@ -110,55 +110,52 @@ class NativeRunner(BaseRunner):
         cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building {self.config.build_type}")
 
-    def show_setup_info(self) -> None:
-        """Show native build setup information"""
+    def get_config_summary(self) -> dict[str, list[tuple[str, str]]]:
+        """Return native build configuration as grouped key-value pairs."""
+        sections: dict[str, list[tuple[str, str]]] = {}
+
+        # Toolchain section (Windows only)
         if IS_WINDOWS:
+            toolchain: list[tuple[str, str]] = []
             if self._platform.toolchain_path:
-                if self.config.verbose:
-                    console.print(
-                        f"[green]Found vcvarsall:[/green] [dim]{self._platform.toolchain_path}[/dim]"
-                    )
-                    console.print(
-                        f"[green]vcvars arch:[/green] [dim]{self._platform.vcvars_arch}[/dim]"
-                    )
-                    if self._platform.cache_hit is True:
-                        console.print(
-                            "[green]vcvars env:[/green] [dim]loaded from cache[/dim]"
-                        )
-                    elif self._platform.cache_hit is False:
-                        console.print(
-                            "[green]vcvars env:[/green] [dim]captured (cache updated)[/dim]"
-                        )
-                    console.print(
-                        f"[green]vcvars activation:[/green] [dim]{self._activate_elapsed:.2f}s[/dim]"
-                    )
+                toolchain.append(("vcvarsall.bat", str(self._platform.toolchain_path)))
+                toolchain.append(("vcvars arch", self._platform.vcvars_arch))
+                if self._platform.cache_hit is True:
+                    toolchain.append(("vcvars env", "loaded from cache"))
+                elif self._platform.cache_hit is False:
+                    toolchain.append(("vcvars env", "captured (cache updated)"))
+                toolchain.append(("Activation time", f"{self._activate_elapsed:.2f}s"))
             else:
-                console.print(
-                    "[yellow]Warning: Visual Studio vcvarsall.bat not found. Build may fail.[/yellow]"
-                )
-                console.print(
-                    "[dim]Please install Visual Studio 2019 or 2022 with C++ tools.[/dim]"
-                )
+                toolchain.append(("vcvarsall.bat", "NOT FOUND"))
+            sections["Toolchain"] = toolchain
 
-        if self.config.verbose:
+        # Architecture section
+        arch: list[tuple[str, str]] = []
+        arch.append(("Host architecture", self._native_config.arch))
+        arch.append(("Target architecture", self._native_config.target_arch))
+        if self._native_config.requested_arch:
+            arch.append(("Requested arch", self._native_config.requested_arch))
+        if self._native_config.profile_override:
+            arch.append(("Profile override", self._native_config.profile_override))
+        if self._native_config.conan_profile_path:
+            arch.append(("Conan profile", str(self._native_config.conan_profile_path)))
+        sections["Architecture"] = arch
+
+        # Environment (.env) section
+        if self._native_config.env_vars:
+            env_items: list[tuple[str, str]] = []
+            for key, value in self._native_config.env_vars.items():
+                env_items.append((key, value))
+            sections["Environment (.env)"] = env_items
+
+        return sections
+
+    def show_setup_info(self) -> None:
+        """Show critical native build warnings."""
+        if IS_WINDOWS and not self._platform.toolchain_path:
             console.print(
-                f"[green]Detected architecture:[/green] [dim]{self._native_config.arch}[/dim]"
+                "[yellow]Warning: Visual Studio vcvarsall.bat not found. Build may fail.[/yellow]"
             )
-            if self._native_config.requested_arch:
-                console.print(
-                    f"[green]Requested arch:[/green] [dim]{self._native_config.requested_arch}[/dim]"
-                )
-            if self._native_config.profile_override:
-                console.print(
-                    f"[green]Profile override:[/green] [dim]{self._native_config.profile_override}[/dim]"
-                )
-            if self._native_config.conan_profile_path:
-                console.print(
-                    f"[green]Conan profile:[/green] [dim]{self._native_config.conan_profile_path}[/dim]"
-                )
-
-            # Show loaded environment variables from .env
-            if self._native_config.env_vars:
-                console.print("[green]Loaded from .env:[/green]")
-                for key, value in self._native_config.env_vars.items():
-                    console.print(f"  [dim]{key}={value}[/dim]")
+            console.print(
+                "[dim]Please install Visual Studio 2019 or 2022 with C++ tools.[/dim]"
+            )

@@ -387,6 +387,36 @@ def doctor(
         raise typer.Exit(1)
 
 
+
+@app.command("config")
+def show_config(
+    release: ReleaseOpt = False,
+    platform: PlatformOpt = "native",
+    arch: ArchOpt = None,
+    profile: ProfileOpt = None,
+):
+    """
+    Show resolved build configuration without building.
+
+    [bold]Examples:[/bold]
+
+      [cyan]sbuild config[/cyan]                    Show debug native config
+      [cyan]sbuild config --release[/cyan]          Show release config
+      [cyan]sbuild config --arch x64[/cyan]         Show x64 config
+      [cyan]sbuild config -p wasm[/cyan]            Show WASM config
+    """
+    build_type = "release" if release else "debug"
+
+    try:
+        with BuildSession(platform, build_type, verbose=True, arch=arch, profile=profile) as session:
+            # Access runner to trigger full config resolution + log writing
+            _ = session.runner
+            session._show_config_console()
+    except (BuildError, ConfigError) as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
 @app.command()
 def test(
     release: ReleaseOpt = False,

@@ -64,6 +64,22 @@ class WasmRunner(BaseRunner):
         cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building WASM {self.config.build_type}")
 
+    def get_config_summary(self) -> dict[str, list[tuple[str, str]]]:
+        """Return WASM build configuration as grouped key-value pairs."""
+        sections: dict[str, list[tuple[str, str]]] = {}
+
+        toolchain: list[tuple[str, str]] = []
+        if IS_WINDOWS and self._platform.toolchain_path:
+            toolchain.append(("vcvarsall.bat", str(self._platform.toolchain_path)))
+        toolchain.append(("EMSDK", str(self._wasm_config.emsdk_path)))
+        toolchain.append(("Qt WASM path", str(self._wasm_config.qt_wasm_path)))
+        toolchain.append(("Qt Host path", str(self._wasm_config.qt_host_path)))
+        if self._wasm_config.openssl_path:
+            toolchain.append(("OpenSSL path", str(self._wasm_config.openssl_path)))
+        sections["WASM Toolchain"] = toolchain
+
+        return sections
+
     def serve(self, https: bool = False, port: Optional[int] = None, **kwargs) -> None:
         """Start development server for WASM testing"""
         from ..servers import serve_http, serve_https as serve_https_fn
@@ -85,19 +101,4 @@ class WasmRunner(BaseRunner):
         else:
             serve_http(self.config.build_dir, port=port or 8080)
 
-    def show_setup_info(self) -> None:
-        """Show WASM build setup information"""
-        if self.config.verbose:
-            if self._platform.toolchain_path:
-                console.print(
-                    f"[green]vcvarsall:[/green] [dim]{self._platform.toolchain_path}[/dim]"
-                )
-            console.print(
-                f"[green]EMSDK:[/green] [dim]{self._wasm_config.emsdk_path}[/dim]"
-            )
-            console.print(
-                f"[green]Qt WASM:[/green] [dim]{self._wasm_config.qt_wasm_path}[/dim]"
-            )
-            console.print(
-                f"[green]Qt Host:[/green] [dim]{self._wasm_config.qt_host_path}[/dim]"
-            )
+
