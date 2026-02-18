@@ -17,13 +17,13 @@ from typing import Optional
 from rich.table import Table
 
 from .config import (
-    NativeConfig,
     WasmConfig,
+    detect_architecture,
     load_env_file,
     parse_cmake_project_info,
 )
 from .console import console
-from .exceptions import ConfigError, EnvironmentSetupError
+from .exceptions import EnvironmentSetupError
 from .platform import IS_WINDOWS, create_platform_env
 
 
@@ -212,7 +212,7 @@ class DoctorReport:
         results: list[CheckResult] = []
 
         # Architecture
-        arch = NativeConfig.detect_architecture()
+        arch = detect_architecture()
         results.append(CheckResult("Architecture", CheckStatus.OK, message=arch))
 
         # .env file
@@ -223,7 +223,7 @@ class DoctorReport:
             results.append(CheckResult(
                 ".env file", CheckStatus.WARN, path=env_file,
                 message="Not found",
-                fix_hint="Create .env with native environment variables (e.g. QT_IFW_ROOT)",
+                fix_hint="Create .env with environment variables (e.g. SBUILD_QT_IFW_ROOT, EMSDK)",
             ))
 
         # Conan profiles
@@ -287,30 +287,37 @@ class DoctorReport:
         )
 
     def _check_wasm_env(self) -> list[CheckResult]:
-        env_file = self.project_root / ".env.wasm"
-        if not env_file.exists():
+        """Check WASM environment by looking for EMSDK / SBUILD_WASM_QT_PATH in unified .env."""
+        env_vars = load_env_file(self.project_root / ".env")
+
+        # Detect WASM presence by checking for key WASM vars
+        if "EMSDK" not in env_vars and "SBUILD_WASM_QT_PATH" not in env_vars:
             return [CheckResult(
                 "WASM environment", CheckStatus.WARN,
-                message="Skipped - .env.wasm not found",
-                fix_hint="Create .env.wasm with EMSDK, QT_WASM_PATH, QT_HOST_PATH to enable WASM checks",
+                message="Skipped - no WASM vars in .env",
+                fix_hint="Add EMSDK and SBUILD_WASM_QT_PATH to .env to enable WASM checks",
             )]
 
         results: list[CheckResult] = []
 
-        # Load config
-        try:
-            wasm = WasmConfig.from_env_file(env_file)
-        except ConfigError as e:
+        # Validate required vars
+        missing = [k for k in ("EMSDK", "SBUILD_WASM_QT_PATH") if k not in env_vars]
+        if missing:
             return [CheckResult(
-                ".env.wasm", CheckStatus.FAIL,
-                message=str(e),
-                fix_hint="Fix .env.wasm: ensure EMSDK, QT_WASM_PATH, QT_HOST_PATH are set",
+                "WASM config", CheckStatus.FAIL,
+                message=f"Missing required WASM variables: {', '.join(missing)}",
+                fix_hint="Fix .env: ensure EMSDK and SBUILD_WASM_QT_PATH are set",
             )]
 
-        results.append(CheckResult(".env.wasm", CheckStatus.OK, path=env_file))
+        wasm = WasmConfig(
+            emsdk_path=Path(env_vars["EMSDK"]),
+            qt_wasm_path=Path(env_vars["SBUILD_WASM_QT_PATH"]),
+            qt_host_path=Path(env_vars["SBUILD_WASM_QT_HOST_PATH"]) if "SBUILD_WASM_QT_HOST_PATH" in env_vars else None,
+            openssl_root_dir=Path(env_vars["SBUILD_WASM_OPENSSL_ROOT_DIR"]) if "SBUILD_WASM_OPENSSL_ROOT_DIR" in env_vars else None,
+        )
 
         # EMSDK path
-        results.append(_check_path("EMSDK path", wasm.emsdk_path))
+        results.append(_check_path("EMSDK", wasm.emsdk_path))
 
         # emsdk_env script
         script = "emsdk_env.bat" if self._is_windows else "emsdk_env.sh"
@@ -321,12 +328,13 @@ class DoctorReport:
         ))
 
         # QT paths
-        results.append(_check_path("QT_WASM_PATH", wasm.qt_wasm_path))
-        results.append(_check_path("QT_HOST_PATH", wasm.qt_host_path))
+        results.append(_check_path("SBUILD_WASM_QT_PATH", wasm.qt_wasm_path))
+        if wasm.qt_host_path is not None:
+            results.append(_check_path("SBUILD_WASM_QT_HOST_PATH", wasm.qt_host_path))
 
         # OpenSSL (optional)
-        if wasm.openssl_path is not None:
-            results.append(_check_path("OpenSSL path", wasm.openssl_path, required=False))
+        if wasm.openssl_root_dir:
+            results.append(_check_path("SBUILD_WASM_OPENSSL_ROOT_DIR", wasm.openssl_root_dir, required=False))
 
         return results
 
@@ -444,8 +452,9 @@ class DoctorReport:
                         fix_hint=f"Run 'sbuild configure' to generate the '{name}' preset",
                     ))
 
-        # WASM presets (unchanged logic)
-        wasm_env = (self.project_root / ".env.wasm").exists()
+        # WASM presets — detect by checking for WASM vars in unified .env
+        env_vars = load_env_file(self.project_root / ".env")
+        wasm_env = "EMSDK" in env_vars or "SBUILD_WASM_QT_PATH" in env_vars
         for bt in ("debug", "release"):
             name = f"wasm-{bt}"
             if name in all_names:
@@ -507,27 +516,27 @@ class DoctorReport:
 
         # Qt IFW
         env_vars = load_env_file(self.project_root / ".env")
-        qt_ifw_root = env_vars.get("QT_IFW_ROOT")
+        qt_ifw_root = env_vars.get("SBUILD_QT_IFW_ROOT")
         if qt_ifw_root:
             ifw_bin = Path(qt_ifw_root) / "bin"
             if ifw_bin.exists():
                 results.append(CheckResult(
                     "Qt IFW", CheckStatus.OK,
                     path=ifw_bin,
-                    message=f"QT_IFW_ROOT={qt_ifw_root}",
+                    message=f"SBUILD_QT_IFW_ROOT={qt_ifw_root}",
                 ))
             else:
                 results.append(CheckResult(
                     "Qt IFW", CheckStatus.WARN,
                     path=ifw_bin,
                     message="bin/ not found",
-                    fix_hint=f"QT_IFW_ROOT bin directory missing: {ifw_bin}",
+                    fix_hint=f"SBUILD_QT_IFW_ROOT bin directory missing: {ifw_bin}",
                 ))
         else:
             results.append(CheckResult(
                 "Qt IFW", CheckStatus.WARN,
-                message="QT_IFW_ROOT not set in .env",
-                fix_hint="Set QT_IFW_ROOT in .env to enable IFW packaging",
+                message="SBUILD_QT_IFW_ROOT not set in .env",
+                fix_hint="Set SBUILD_QT_IFW_ROOT in .env to enable IFW packaging",
             ))
 
         # NSIS (Windows only)

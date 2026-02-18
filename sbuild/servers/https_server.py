@@ -56,9 +56,9 @@ def _generate_self_signed_cert(
         return False
     except FileNotFoundError:
         console.print("[red]OpenSSL not found.[/red]")
-        console.print("[yellow]Please set OPENSSL in .env.wasm or install OpenSSL[/yellow]")
+        console.print("[yellow]Ensure openssl is on PATH or set SBUILD_WASM_OPENSSL_ROOT_DIR in .env[/yellow]")
         if platform.system() == "Windows":
-            console.print("[dim]Example: OPENSSL=C:\\Program Files\\Git\\usr\\bin\\openssl.exe[/dim]")
+            console.print("[dim]Example: SBUILD_WASM_OPENSSL_ROOT_DIR=C:\\Program Files\\Git\\usr[/dim]")
         else:
             console.print("[dim]OpenSSL is usually available via your package manager (apt, brew, etc.)[/dim]")
         return False

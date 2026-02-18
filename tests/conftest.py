@@ -27,15 +27,18 @@ def env_file(tmp_path: Path) -> Path:
         "SPACED_KEY = spaced_value \n"
         "EQUAL_VALUE=a=b=c\n"
         "EMPTY_VALUE=\n"
-        "NO_EQUALS_LINE\n",
+        "NO_EQUALS_LINE\n"
+        'DOUBLE_QUOTED="-DFOO=BAR -DBAZ=QUX"\n'
+        "SINGLE_QUOTED='some value'\n"
+        "MISMATCHED_QUOTES=\"not matched'\n",
         encoding="utf-8",
     )
     return p
 
 
 @pytest.fixture
-def wasm_env_file(tmp_path: Path) -> Path:
-    """Create a .env.wasm file with required dirs."""
+def wasm_env_vars(tmp_path: Path) -> dict[str, str]:
+    """Create directories and return WASM env vars dict (unified .env style)."""
     emsdk = tmp_path / "emsdk"
     qt_wasm = tmp_path / "qt_wasm"
     qt_host = tmp_path / "qt_host"
@@ -43,11 +46,8 @@ def wasm_env_file(tmp_path: Path) -> Path:
     qt_wasm.mkdir()
     qt_host.mkdir()
 
-    p = tmp_path / ".env.wasm"
-    p.write_text(
-        f"EMSDK={emsdk}\n"
-        f"QT_WASM_PATH={qt_wasm}\n"
-        f"QT_HOST_PATH={qt_host}\n",
-        encoding="utf-8",
-    )
-    return p
+    return {
+        "EMSDK": str(emsdk),
+        "SBUILD_WASM_QT_PATH": str(qt_wasm),
+        "SBUILD_WASM_QT_HOST_PATH": str(qt_host),
+    }

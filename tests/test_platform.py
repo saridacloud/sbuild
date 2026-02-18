@@ -51,13 +51,13 @@ class TestWindowsEnvFindVcvarsall:
         from sbuild.platform.windows import WindowsEnv
         vcvars = tmp_path / "vcvarsall.bat"
         vcvars.write_text("@echo off", encoding="utf-8")
-        path = WindowsEnv._find_vcvarsall({"VCVARS_PATH": str(vcvars)})
+        path = WindowsEnv._find_vcvarsall({"SBUILD_VCVARS_PATH": str(vcvars)})
         assert path == vcvars
 
     def test_override_not_found_raises(self):
         from sbuild.platform.windows import WindowsEnv
-        with pytest.raises(EnvironmentSetupError, match="VCVARS_PATH not found"):
-            WindowsEnv._find_vcvarsall({"VCVARS_PATH": "C:/nonexistent/vcvarsall.bat"})
+        with pytest.raises(EnvironmentSetupError, match="SBUILD_VCVARS_PATH not found"):
+            WindowsEnv._find_vcvarsall({"SBUILD_VCVARS_PATH": "C:/nonexistent/vcvarsall.bat"})
 
     def test_no_override_no_known_returns_none(self):
         from sbuild.platform.windows import WindowsEnv
@@ -97,20 +97,14 @@ class TestResolveVcvarsArch:
 
     def test_env_overrides_take_precedence(self):
         from sbuild.platform.windows import WindowsEnv
-        result = WindowsEnv._resolve_vcvars_arch({"VCVARS_ARCH": "x86"}, "x86_64")
+        result = WindowsEnv._resolve_vcvars_arch({"SBUILD_VCVARS_ARCH": "x86"}, "x86_64")
         assert result == "x86"
 
-    def test_os_environ_override(self):
+    def test_no_override_uses_arch_mapping(self):
         from sbuild.platform.windows import WindowsEnv
-        with patch("sbuild.platform.windows.os.environ", {"VCVARS_ARCH": "arm64"}):
-            result = WindowsEnv._resolve_vcvars_arch(None, "x86_64")
-        assert result == "arm64"
-
-    def test_env_overrides_beat_os_environ(self):
-        from sbuild.platform.windows import WindowsEnv
-        with patch("sbuild.platform.windows.os.environ", {"VCVARS_ARCH": "arm64"}):
-            result = WindowsEnv._resolve_vcvars_arch({"VCVARS_ARCH": "x86"}, "x86_64")
-        assert result == "x86"
+        # Without env_overrides, arch mapping is used (no os.environ fallback)
+        result = WindowsEnv._resolve_vcvars_arch(None, "x86_64")
+        assert result == "amd64"
 
 
 # -- WindowsEnv caching ------------------------------------------------------

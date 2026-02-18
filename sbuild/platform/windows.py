@@ -154,16 +154,12 @@ class WindowsEnv(PlatformEnv):
     ) -> str:
         """Determine vcvarsall.bat arch argument.
 
-        Priority: VCVARS_ARCH in env_overrides > VCVARS_ARCH in os.environ
-        > mapping from target_arch > default "amd64".
+        Priority: SBUILD_VCVARS_ARCH in env_overrides > mapping from target_arch > default "amd64".
         """
         if env_overrides:
-            override = env_overrides.get("VCVARS_ARCH")
+            override = env_overrides.get("SBUILD_VCVARS_ARCH")
             if override:
                 return override
-        env_override = os.environ.get("VCVARS_ARCH")
-        if env_override:
-            return env_override
         return _VCVARS_ARCH_MAPPING.get(target_arch, _DEFAULT_VCVARS_ARCH)
 
     @staticmethod
@@ -171,15 +167,13 @@ class WindowsEnv(PlatformEnv):
         """Find vcvarsall.bat, checking overrides first, then known paths."""
         override = None
         if env_overrides:
-            override = env_overrides.get("VCVARS_PATH")
-        if not override:
-            override = os.environ.get("VCVARS_PATH")
+            override = env_overrides.get("SBUILD_VCVARS_PATH")
 
         if override:
             path = Path(override)
             if path.exists():
                 return path
-            raise EnvironmentSetupError(f"VCVARS_PATH not found: {override}")
+            raise EnvironmentSetupError(f"SBUILD_VCVARS_PATH not found: {override}")
 
         # Search known installation paths
         for path_str in _KNOWN_VCVARSALL_PATHS:

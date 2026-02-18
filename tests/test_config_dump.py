@@ -6,14 +6,21 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from sbuild.config import ConfigManager
 from sbuild.session import BuildSession
+
+
+def _make_config(project_root: Path, **overrides) -> "BuildConfig":
+    """Helper: create a BuildConfig via ConfigManager for the given project root."""
+    return ConfigManager(project_root=project_root, **overrides).resolve()
 
 
 class TestLogResolvedConfig:
     """Test that _log_resolved_config writes expected sections to log."""
 
     def test_writes_resolved_config_section(self, project_root):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner  # trigger lazy init + log
             log_path = session.log_path
 
@@ -21,7 +28,8 @@ class TestLogResolvedConfig:
         assert "Resolved Configuration" in content
 
     def test_writes_project_info(self, project_root):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner
             log_path = session.log_path
 
@@ -30,7 +38,8 @@ class TestLogResolvedConfig:
         assert "1.2.3" in content
 
     def test_writes_build_directory(self, project_root):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner
             log_path = session.log_path
 
@@ -38,7 +47,8 @@ class TestLogResolvedConfig:
         assert "Build directory:" in content
 
     def test_writes_presets(self, project_root):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner
             log_path = session.log_path
 
@@ -47,18 +57,19 @@ class TestLogResolvedConfig:
         assert "Build preset:" in content
 
     def test_writes_profiling_timers(self, project_root):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner
             log_path = session.log_path
 
         content = log_path.read_text(encoding="utf-8")
-        assert "Config creation:" in content
         assert "Runner init:" in content
 
     def test_writes_sbuild_version(self, project_root):
         from sbuild import __version__
 
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner
             log_path = session.log_path
 
@@ -66,7 +77,8 @@ class TestLogResolvedConfig:
         assert f"sbuild version: {__version__}" in content
 
     def test_early_command_log_line(self, project_root):
-        with BuildSession(project_root=project_root, command="build") as session:
+        config = _make_config(project_root)
+        with BuildSession(config, command="build") as session:
             log_path = session.log_path
 
         content = log_path.read_text(encoding="utf-8")
@@ -74,7 +86,8 @@ class TestLogResolvedConfig:
         assert "CLI Parameters" not in content
 
     def test_writes_command_in_resolved_config(self, project_root):
-        with BuildSession(project_root=project_root, command="rebuild") as session:
+        config = _make_config(project_root)
+        with BuildSession(config, command="rebuild") as session:
             _ = session.runner
             log_path = session.log_path
 
@@ -82,7 +95,8 @@ class TestLogResolvedConfig:
         assert "  Command: rebuild" in content
 
     def test_writes_verbose_in_resolved_config(self, project_root):
-        with BuildSession(project_root=project_root, verbose=True) as session:
+        config = _make_config(project_root, verbose=True)
+        with BuildSession(config, command="build") as session:
             _ = session.runner
             log_path = session.log_path
 
@@ -94,7 +108,8 @@ class TestShowConfigConsole:
     """Test that _show_config_console produces expected output."""
 
     def test_prints_project_info(self, project_root, capsys):
-        with BuildSession(project_root=project_root, command="config") as session:
+        config = _make_config(project_root)
+        with BuildSession(config, command="config") as session:
             _ = session.runner
             session._show_config_console()
 
@@ -104,7 +119,8 @@ class TestShowConfigConsole:
         assert "1.2.3" in captured.out
 
     def test_prints_command(self, project_root, capsys):
-        with BuildSession(project_root=project_root, command="config") as session:
+        config = _make_config(project_root)
+        with BuildSession(config, command="config") as session:
             _ = session.runner
             session._show_config_console()
 
@@ -112,7 +128,8 @@ class TestShowConfigConsole:
         assert "config" in captured.out
 
     def test_prints_build_directory(self, project_root, capsys):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner
             session._show_config_console()
 
@@ -120,7 +137,8 @@ class TestShowConfigConsole:
         assert "Build directory" in captured.out
 
     def test_prints_presets(self, project_root, capsys):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             _ = session.runner
             session._show_config_console()
 
@@ -133,14 +151,16 @@ class TestVerboseShowsConfig:
     """Test that verbose mode shows config in show_header, non-verbose doesn't."""
 
     def test_verbose_shows_config(self, project_root, capsys):
-        with BuildSession(project_root=project_root, verbose=True, command="build") as session:
+        config = _make_config(project_root, verbose=True)
+        with BuildSession(config, command="build") as session:
             session.show_header()
 
         captured = capsys.readouterr()
         assert "sbuild version" in captured.out
 
     def test_non_verbose_hides_config(self, project_root, capsys):
-        with BuildSession(project_root=project_root, verbose=False, command="build") as session:
+        config = _make_config(project_root, verbose=False)
+        with BuildSession(config, command="build") as session:
             session.show_header()
 
         captured = capsys.readouterr()
@@ -151,7 +171,8 @@ class TestRunnerConfigSummary:
     """Test that runners return expected config summary sections."""
 
     def test_native_runner_has_architecture_section(self, project_root):
-        with BuildSession(project_root=project_root) as session:
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
             summary = session.runner.get_config_summary()
 
         assert "Architecture" in summary

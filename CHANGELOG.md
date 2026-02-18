@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ConfigManager` class — single point of config resolution; receives raw CLI args, loads `.env` once, resolves everything via generic `_resolve()` method (CLI > .env > os.environ > default priority), and produces a fully-populated `BuildConfig`
+- `detect_architecture()` standalone function (extracted from `NativeConfig.detect_architecture()`)
+
+### Changed
+
+- **BREAKING:** `BuildSession` now takes a pre-built `BuildConfig` instead of ~10 individual args
+- `BuildConfig`, `NativeConfig`, `WasmConfig` are now frozen dataclasses (pure data holders with no logic)
+- `WasmConfig.qt_host_path` uses `None` instead of empty `Path()` as sentinel for "not set"
+- Pre-computed fields on `BuildConfig`: `build_dir`, `preset_name`, `build_preset_name`, `project_name`, `version` (no longer properties or delegated to platform config)
+- `NativeConfig.env_vars` now includes SBUILD_* vars from os.environ, eliminating `WindowsEnv` os.environ fallbacks
+
+### Removed
+
+- `PlatformConfig` abstract base class — `NativeConfig` and `WasmConfig` are independent dataclasses
+- `_CONFIG_FACTORIES` registry — `ConfigManager` handles platform dispatch directly
+- 10+ individual `resolve_*()` functions — replaced by `ConfigManager._resolve()`
+- `NativeConfig.detect()` classmethod — logic moved to `ConfigManager._build_native_config()`
+- `WasmConfig.from_env()` classmethod — logic moved to `ConfigManager._build_wasm_config()`
+- `_get_project_env()` from CLI — `ConfigManager` loads `.env` internally
+- `BuildConfig.__post_init__` — all resolution moved to `ConfigManager.resolve()`
+- `get_environment()` methods from config classes — replaced by pre-computed `.environment` field on `WasmConfig`
+- `validate()`, `display_name`, `build_dir_name()`, `preset_name()`, `build_preset_name()` methods from config classes
+
+### Added (previous)
+
+- Universal environment variable defaults: `SBUILD_PLATFORM`, `SBUILD_VERBOSE`, `SBUILD_BUILD_DIR`, `SBUILD_INSTALL_DIR`, `SBUILD_PARALLEL_JOBS`, `SBUILD_CMAKE_ARGS` — all configurable via `.env` or system env with CLI override
+- `SBUILD_WASM_CMAKE_ARGS` for WASM-specific cmake arguments
+- Auto-injection of `-DQT_HOST_PATH` and `-DOPENSSL_ROOT_DIR` cmake defines from WASM config vars
+- CMake args merging: `SBUILD_CMAKE_ARGS` + `SBUILD_WASM_CMAKE_ARGS` (if WASM) + CLI `--cmake-args` (last wins)
+- Quote stripping in `.env` file parser — `SBUILD_CMAKE_ARGS="-DFOO=BAR"` now works correctly
+- OpenSSL binary lookup: tries `openssl` from PATH first, falls back to `SBUILD_WASM_OPENSSL_ROOT_DIR/bin/openssl`
+- Resolver functions for all new env vars following CLI > .env > system env > default priority
+- `_get_project_env()` in CLI for lazy-loaded `.env` caching
+
+### Changed
+
+- **BREAKING:** All sbuild-specific env vars now use `SBUILD_` prefix:
+  - `VCVARS_PATH` → `SBUILD_VCVARS_PATH`
+  - `VCVARS_ARCH` → `SBUILD_VCVARS_ARCH`
+  - `QT_IFW_ROOT` → `SBUILD_QT_IFW_ROOT`
+  - `QT_WASM_PATH` → `SBUILD_WASM_QT_PATH`
+  - `QT_HOST_PATH` → `SBUILD_WASM_QT_HOST_PATH`
+  - `OPENSSL` → `SBUILD_WASM_OPENSSL_ROOT_DIR`
+- **BREAKING:** Single `.env` file replaces `.env` + `.env.wasm` split — all WASM vars now live in `.env`
+- **BREAKING:** `WasmConfig.from_env_file()` replaced with `WasmConfig.from_env(env_vars)` — receives pre-loaded dict instead of file path
+- **BREAKING:** `WasmConfig.openssl_path` renamed to `WasmConfig.openssl_root_dir`
+- `BuildConfig` now loads `.env` centrally and passes `env_vars` to platform config factories
+- `BuildConfig.build_dir` uses configurable `build_dir_base` (from `SBUILD_BUILD_DIR`) instead of hardcoded `"build"`
+- `NativeConfig.detect()` accepts optional `env_vars` parameter (avoids re-loading `.env`)
+- CLI option defaults changed from hardcoded values to `None` with env-var resolution in command bodies
+- `WasmConfig.get_environment()` maps `SBUILD_WASM_QT_PATH` back to `QT_WASM_PATH` for cmake preset compatibility
+- `sbuild doctor` WASM checks now detect WASM presence by `EMSDK`/`SBUILD_WASM_QT_PATH` in unified `.env`
+- Config dump labels updated to show new `SBUILD_` variable names
+
+### Removed
+
+- `.env.wasm` file support — all configuration now lives in a single `.env` file
+- `wasm_env_file` test fixture (replaced with `wasm_env_vars` dict fixture)
+
 ### Changed
 
 - Extract magic numbers in `BaseRunner` to named class constants (`_PANEL_MAX_LINES`, `_PANEL_HEIGHT`, `_ERROR_TAIL_LINES`, etc.)
@@ -50,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `.env` variable changes now take effect immediately without clearing the vcvarsall cache — previously, cached environment snapshots contained stale `.env` values that persisted until the cache was invalidated
 - VSCode tasks now correctly wrap cmake defines with `--cmake-args` flag instead of passing bare `-D` args
 - Empty cmake args from VSCode prompt no longer append an empty string to cmake commands
 - Target architecture detection now correctly normalizes friendly arch names (e.g. `x64` → `x86_64`) before falling back, fixing incorrect architecture when using `--arch` with profiles that don't specify `arch=`

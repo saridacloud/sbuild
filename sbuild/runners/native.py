@@ -28,26 +28,26 @@ class NativeRunner(BaseRunner):
             raise TypeError(f"Expected NativeConfig, got {type(native_config).__name__}")
         self._native_config = native_config
 
-        self._env: dict[str, str] = dict(os.environ)
-
-        # Load environment variables from .env file if available
-        if native_config.env_vars:
-            self._env.update(native_config.env_vars)
-
-            # Add Qt IFW bin directory to PATH if configured
-            if "QT_IFW_ROOT" in native_config.env_vars:
-                qt_ifw_bin = Path(native_config.env_vars["QT_IFW_ROOT"]) / "bin"
-                if qt_ifw_bin.exists():
-                    self._env["PATH"] = str(qt_ifw_bin) + os.pathsep + self._env.get("PATH", "")
-
         # Activate platform toolchain (vcvarsall on Windows, passthrough on Linux)
         self._platform = create_platform_env(
             env_overrides=native_config.env_vars,
             target_arch=native_config.target_arch,
         )
         t0 = time.perf_counter()
-        self._env = self._platform.activate(base_env=self._env, cache_dir=config.project_root)
+        self._env: dict[str, str] = self._platform.activate(
+            base_env=dict(os.environ), cache_dir=config.project_root,
+        )
         self._activate_elapsed = time.perf_counter() - t0
+
+        # Apply .env overrides on top of activated env (always fresh, not cached)
+        if native_config.env_vars:
+            self._env.update(native_config.env_vars)
+            if "SBUILD_QT_IFW_ROOT" in native_config.env_vars:
+                qt_ifw_bin = Path(native_config.env_vars["SBUILD_QT_IFW_ROOT"]) / "bin"
+                if qt_ifw_bin.exists():
+                    self._env["PATH"] = (
+                        str(qt_ifw_bin) + os.pathsep + self._env.get("PATH", "")
+                    )
 
     def _get_command_env(self) -> Optional[dict[str, str]]:
         """Get environment variables for command execution"""

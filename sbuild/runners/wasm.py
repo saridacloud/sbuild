@@ -5,6 +5,7 @@ Build runner for WebAssembly (emscripten + cmake) builds.
 """
 
 import os
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -32,7 +33,7 @@ class WasmRunner(BaseRunner):
 
         # Build base env from platform config environment
         env = dict(os.environ)
-        env.update(wasm_config.get_environment())
+        env.update(wasm_config.environment)
 
         # Activate emscripten via platform env
         script_name = "emsdk_env.bat" if IS_WINDOWS else "emsdk_env.sh"
@@ -56,6 +57,13 @@ class WasmRunner(BaseRunner):
     def configure(self) -> bool:
         """Run cmake configure with WASM preset"""
         cmd = f"cmake --preset {self.config.preset_name}"
+
+        # Auto-inject cmake defines from WASM config
+        if self._wasm_config.qt_host_path is not None:
+            cmd += f" -DQT_HOST_PATH={self._wasm_config.qt_host_path}"
+        if self._wasm_config.openssl_root_dir:
+            cmd += f" -DOPENSSL_ROOT_DIR={self._wasm_config.openssl_root_dir}"
+
         if self.config.cmake_args:
             cmd += f" {self.config.cmake_args}"
         return self.run_command(cmd, "Configuring WASM project")
@@ -73,11 +81,21 @@ class WasmRunner(BaseRunner):
         if IS_WINDOWS and self._platform.toolchain_path:
             toolchain.append(("vcvarsall.bat", str(self._platform.toolchain_path)))
         toolchain.append(("EMSDK", str(self._wasm_config.emsdk_path)))
-        toolchain.append(("Qt WASM path", str(self._wasm_config.qt_wasm_path)))
-        toolchain.append(("Qt Host path", str(self._wasm_config.qt_host_path)))
-        if self._wasm_config.openssl_path:
-            toolchain.append(("OpenSSL path", str(self._wasm_config.openssl_path)))
+        toolchain.append(("SBUILD_WASM_QT_PATH", str(self._wasm_config.qt_wasm_path)))
+        if self._wasm_config.qt_host_path is not None:
+            toolchain.append(("SBUILD_WASM_QT_HOST_PATH", str(self._wasm_config.qt_host_path)))
+        if self._wasm_config.openssl_root_dir:
+            toolchain.append(("SBUILD_WASM_OPENSSL_ROOT_DIR", str(self._wasm_config.openssl_root_dir)))
         sections["WASM Toolchain"] = toolchain
+
+        # Auto-injected cmake defines
+        auto_defines: list[tuple[str, str]] = []
+        if self._wasm_config.qt_host_path is not None:
+            auto_defines.append(("-DQT_HOST_PATH", str(self._wasm_config.qt_host_path)))
+        if self._wasm_config.openssl_root_dir:
+            auto_defines.append(("-DOPENSSL_ROOT_DIR", str(self._wasm_config.openssl_root_dir)))
+        if auto_defines:
+            sections["Auto-injected cmake defines"] = auto_defines
 
         return sections
 
@@ -93,7 +111,18 @@ class WasmRunner(BaseRunner):
             return
 
         if https:
-            openssl_path = self._wasm_config.openssl_path
+            # Try openssl from PATH first, fall back to SBUILD_WASM_OPENSSL_ROOT_DIR/bin/openssl
+            openssl_path = None
+            system_openssl = shutil.which("openssl")
+            if system_openssl:
+                openssl_path = Path(system_openssl)
+            elif self._wasm_config.openssl_root_dir:
+                candidate = self._wasm_config.openssl_root_dir / "bin" / "openssl"
+                if IS_WINDOWS:
+                    candidate = candidate.with_suffix(".exe")
+                if candidate.exists():
+                    openssl_path = candidate
+
             serve_https_fn(
                 self.config.build_dir,
                 port=port or 8443,
