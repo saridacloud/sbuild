@@ -174,6 +174,11 @@ _FRIENDLY_ARCH_MAP = {
 VALID_ARCH_VALUES = list(_FRIENDLY_ARCH_MAP.keys())
 
 
+def normalize_arch(friendly_arch: str) -> str:
+    """Convert a friendly architecture name to its Conan equivalent."""
+    return _FRIENDLY_ARCH_MAP.get(friendly_arch, friendly_arch)
+
+
 def resolve_arch(
     cli_arch: str | None,
     env_vars: dict[str, str],
@@ -259,14 +264,15 @@ class NativeConfig(PlatformConfig):
             config.project_root, build_type, arch=effective_arch, profile=profile,
         )
 
-        # Detect target arch from resolved profile (or fall back to host)
-        config.target_arch = cls._detect_target_arch(config.conan_profile_path, config.arch)
+        # Detect target arch from resolved profile (or fall back to requested/host arch)
+        fallback_arch = normalize_arch(effective_arch) if effective_arch else config.arch
+        config.target_arch = cls._detect_target_arch(config.conan_profile_path, fallback_arch)
 
         return config
 
     @classmethod
     def _detect_target_arch(cls, profile_path: Path | None, fallback_arch: str) -> str:
-        """Detect target architecture from resolved Conan profile, falling back to host arch."""
+        """Detect target architecture from resolved Conan profile, falling back to fallback_arch."""
         if profile_path and profile_path.exists():
             arch = parse_conan_profile_arch(profile_path)
             if arch:

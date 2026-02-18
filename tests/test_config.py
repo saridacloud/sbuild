@@ -14,6 +14,7 @@ from sbuild.config import (
     parse_conan_profile_arch,
     resolve_arch,
     resolve_profile_path,
+    normalize_arch,
 )
 from sbuild.exceptions import ConfigError, EnvironmentSetupError
 
@@ -597,6 +598,59 @@ class TestNativeConfigArchProfile:
         with patch("sbuild.config.platform.system", return_value="Windows"):
             cfg = NativeConfig.detect(tmp_path, "Debug", arch="x64")
         assert cfg.requested_arch == "x64"
+
+
+# -- normalize_arch -----------------------------------------------------------
+
+class TestNormalizeArch:
+    def test_x86_passthrough(self):
+        assert normalize_arch("x86") == "x86"
+
+    def test_x64_to_x86_64(self):
+        assert normalize_arch("x64") == "x86_64"
+
+    def test_arm64_to_armv8(self):
+        assert normalize_arch("arm64") == "armv8"
+
+    def test_conan_name_passthrough_x86_64(self):
+        assert normalize_arch("x86_64") == "x86_64"
+
+    def test_conan_name_passthrough_armv8(self):
+        assert normalize_arch("armv8") == "armv8"
+
+    def test_unknown_passthrough(self):
+        assert normalize_arch("mips") == "mips"
+
+
+# -- NativeConfig.detect arch regression tests --------------------------------
+
+class TestNativeConfigDetectArchFix:
+    """Regression tests for arch detection bugs (x86 on x86_64 host)."""
+
+    def test_detect_with_arch_no_profile_uses_requested_arch(self, tmp_path):
+        """Bug 1: When profile doesn't exist, fallback should use requested arch, not host."""
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        # No profile file created — profile lookup will return None
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = NativeConfig.detect(tmp_path, "Debug", arch="x86")
+        assert cfg.target_arch == "x86"
+
+    def test_detect_with_x64_normalizes_target_arch(self, tmp_path):
+        """Bug 2: x64 should normalize to x86_64 in target_arch."""
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = NativeConfig.detect(tmp_path, "Debug", arch="x64")
+        assert cfg.target_arch == "x86_64"
+
+    def test_detect_with_arm64_normalizes_target_arch(self, tmp_path):
+        """Bug 2: arm64 should normalize to armv8 in target_arch."""
+        cmake = tmp_path / "CMakeLists.txt"
+        cmake.write_text("project(Test VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"):
+            cfg = NativeConfig.detect(tmp_path, "Debug", arch="arm64")
+        assert cfg.target_arch == "armv8"
 
 
 # -- BuildConfig with arch/profile -------------------------------------------
