@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- VSCode tasks now correctly wrap cmake defines with `--cmake-args` flag instead of passing bare `-D` args
+- Empty cmake args from VSCode prompt no longer append an empty string to cmake commands
 - Target architecture detection now correctly normalizes friendly arch names (e.g. `x64` → `x86_64`) before falling back, fixing incorrect architecture when using `--arch` with profiles that don't specify `arch=`
 - Configure status message now shows target architecture instead of host architecture
 

@@ -230,9 +230,9 @@
         {
             "label": "Build...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
                 "options": {
                     "shell": {
                         "executable": "cmd.exe",
@@ -252,9 +252,9 @@
         {
             "label": "Rebuild...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
                 "options": {
                     "shell": {
                         "executable": "cmd.exe",
@@ -296,9 +296,9 @@
         {
             "label": "Configure...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
+            "command": "${workspaceFolder}/.venv/bin/sbuild configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
+                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
                 "options": {
                     "shell": {
                         "executable": "cmd.exe",
@@ -614,7 +614,7 @@
         {
             "id": "cmakeArgs",
             "type": "promptString",
-            "description": "Extra CMake args (e.g. --cmake-args \"-DFOO=ON\", leave empty for none)",
+            "description": "Extra CMake defines (e.g. -DFOO=ON, leave empty for none)",
             "default": ""
         },
         {

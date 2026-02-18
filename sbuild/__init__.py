@@ -4,7 +4,7 @@ sbuild - Unified build system for Conan 2 + CMake projects
 This package provides a unified build system for native and WebAssembly builds.
 """
 
-__version__ = "1.2.4"
+__version__ = "1.2.5"
 
 from .logging import LogManager, LoggingConsole
 from .console import console

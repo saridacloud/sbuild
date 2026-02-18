@@ -74,6 +74,7 @@ def _do_build(
         arch: Target architecture (x86, x64, arm64)
         profile: Exact Conan profile name override
     """
+    cmake_args = cmake_args.strip() if cmake_args else None
     command = "rebuild" if (clean_first and always_configure) else "build"
     with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number,
                       arch=arch, profile=profile, command=command) as session:
@@ -249,6 +250,7 @@ def configure(
       [cyan]sbuild configure --arch x64[/cyan]     Configure for x64 architecture
       [cyan]sbuild configure --cmake-args "-DENABLE_FEATURE=ON"[/cyan]
     """
+    cmake_args = cmake_args.strip() if cmake_args else None
     build_type = "release" if release else "debug"
 
     with BuildSession(platform, build_type, verbose, cmake_args=cmake_args, build_number=build_number,
