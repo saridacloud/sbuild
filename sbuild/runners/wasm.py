@@ -26,7 +26,8 @@ class WasmRunner(BaseRunner):
         super().__init__(config, log_manager)
 
         wasm_config = config.platform_config
-        assert isinstance(wasm_config, WasmConfig)
+        if not isinstance(wasm_config, WasmConfig):
+            raise TypeError(f"Expected WasmConfig, got {type(wasm_config).__name__}")
         self._wasm_config = wasm_config
 
         # Build base env from platform config environment
@@ -80,7 +81,7 @@ class WasmRunner(BaseRunner):
 
         return sections
 
-    def serve(self, https: bool = False, port: Optional[int] = None, **kwargs) -> None:
+    def serve(self, https: bool = False, port: Optional[int] = None) -> None:
         """Start development server for WASM testing"""
         from ..servers import serve_http, serve_https as serve_https_fn
 

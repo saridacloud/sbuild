@@ -23,7 +23,7 @@ from .config import (
     parse_cmake_project_info,
 )
 from .console import console
-from .exceptions import ConfigError
+from .exceptions import ConfigError, EnvironmentSetupError
 from .platform import IS_WINDOWS, create_platform_env
 
 
@@ -60,7 +60,7 @@ class DoctorReport:
         if self._platform.toolchain_path:
             try:
                 self._vcvars_env = self._platform.activate(cache_dir=self.project_root)
-            except Exception:
+            except (EnvironmentSetupError, OSError):
                 pass
 
     # --- public API ---

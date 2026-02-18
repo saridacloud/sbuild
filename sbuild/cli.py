@@ -47,11 +47,16 @@ ArchOpt = Annotated[Optional[str], typer.Option("--arch", "-A", help="Target arc
 ProfileOpt = Annotated[Optional[str], typer.Option("--profile", help="Exact Conan profile name (overrides --arch)")]
 
 
+def _build_type(release: bool) -> str:
+    """Return 'release' or 'debug' based on the flag."""
+    return "release" if release else "debug"
+
+
 def _get_build_types(all_configs: bool, release: bool) -> list[str]:
     """Get list of build types based on flags."""
     if all_configs:
         return ["debug", "release"]
-    return ["release" if release else "debug"]
+    return [_build_type(release)]
 
 
 def _do_build(
@@ -124,7 +129,7 @@ def main(
     """Default action: incremental build."""
     if ctx.invoked_subcommand is None:
         # Default to build command
-        build_type = "release" if release else "debug"
+        build_type = _build_type(release)
         _do_build(platform, build_type, jobs, verbose, build_number, cmake_args,
                   clean_first=clean, arch=arch, profile=profile)
 
@@ -218,7 +223,7 @@ def clean(
       [cyan]sbuild clean --release[/cyan]          Clean release build
       [cyan]sbuild clean --arch x64[/cyan]         Clean x64 debug build
     """
-    build_type = "release" if release else "debug"
+    build_type = _build_type(release)
 
     with BuildSession(platform, build_type, arch=arch, profile=profile, command="clean") as session:
         session.show_header()
@@ -251,7 +256,7 @@ def configure(
       [cyan]sbuild configure --cmake-args "-DENABLE_FEATURE=ON"[/cyan]
     """
     cmake_args = cmake_args.strip() if cmake_args else None
-    build_type = "release" if release else "debug"
+    build_type = _build_type(release)
 
     with BuildSession(platform, build_type, verbose, cmake_args=cmake_args, build_number=build_number,
                       arch=arch, profile=profile, command="configure") as session:
@@ -283,7 +288,7 @@ def install(
       [cyan]sbuild install --release[/cyan]        Install release to ./install/Release
       [cyan]sbuild install --prefix dist[/cyan]    Install to custom directory
     """
-    build_type = "release" if release else "debug"
+    build_type = _build_type(release)
 
     with BuildSession(platform, build_type, arch=arch, profile=profile, command="install") as session:
         if session.runner.install(prefix, component, system_install):
@@ -352,7 +357,7 @@ def serve(
       [cyan]sbuild serve -p wasm --https[/cyan]     HTTPS server on port 8443
       [cyan]sbuild serve -p wasm --port 9000[/cyan] Custom port
     """
-    build_type = "release" if release else "debug"
+    build_type = _build_type(release)
 
     try:
         with BuildSession(platform, build_type, command="serve") as session:
@@ -407,7 +412,7 @@ def show_config(
       [cyan]sbuild config --arch x64[/cyan]         Show x64 config
       [cyan]sbuild config -p wasm[/cyan]            Show WASM config
     """
-    build_type = "release" if release else "debug"
+    build_type = _build_type(release)
 
     try:
         with BuildSession(platform, build_type, verbose=True, arch=arch, profile=profile, command="config") as session:
@@ -445,7 +450,7 @@ def test(
       [cyan]sbuild test --rerun-failed[/cyan]      Re-run only failed tests
       [cyan]sbuild test --test-verbose[/cyan]      Show full CTest output
     """
-    build_type = "release" if release else "debug"
+    build_type = _build_type(release)
 
     with BuildSession(platform, build_type, verbose, jobs, arch=arch, profile=profile, command="test") as session:
         if not session.runner.supports_tests:

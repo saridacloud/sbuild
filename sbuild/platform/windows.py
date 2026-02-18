@@ -128,7 +128,7 @@ class WindowsEnv(PlatformEnv):
                 data = pickle.load(f)
             if data.get("fingerprint") == fingerprint:
                 return data["env"]
-        except Exception:
+        except (OSError, pickle.UnpicklingError):
             pass
         return None
 
@@ -144,7 +144,7 @@ class WindowsEnv(PlatformEnv):
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "wb") as f:
                 pickle.dump({"fingerprint": fingerprint, "env": env}, f)
-        except Exception:
+        except (OSError, pickle.PicklingError):
             pass
 
     @staticmethod

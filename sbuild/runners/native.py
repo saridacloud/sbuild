@@ -11,6 +11,7 @@ from typing import Optional
 
 from ..config import BuildConfig, NativeConfig
 from ..console import console
+from ..exceptions import ConfigError
 from ..logging import LogManager
 from ..platform import IS_WINDOWS, create_platform_env
 from .base import BaseRunner
@@ -19,14 +20,12 @@ from .base import BaseRunner
 class NativeRunner(BaseRunner):
     """Build runner for native (conan + cmake) builds"""
 
-    supports_tests = True
-    supports_serve = False
-
     def __init__(self, config: BuildConfig, log_manager: Optional[LogManager] = None):
         super().__init__(config, log_manager)
 
         native_config = config.platform_config
-        assert isinstance(native_config, NativeConfig)
+        if not isinstance(native_config, NativeConfig):
+            raise TypeError(f"Expected NativeConfig, got {type(native_config).__name__}")
         self._native_config = native_config
 
         self._env: dict[str, str] = dict(os.environ)
@@ -54,30 +53,22 @@ class NativeRunner(BaseRunner):
         """Get environment variables for command execution"""
         return self._env
 
-    def _prepare_command(self, cmd: str) -> str:
-        """No-op: vcvars env is now passed via env= parameter"""
-        return cmd
-
     def configure(self) -> bool:
         """Run conan install + cmake configure"""
         arch = self._native_config.target_arch
         profile_path = self._native_config.conan_profile_path
 
         # Validate explicit --profile or --arch when profile file doesn't exist
-        if self._native_config.profile_override and not profile_path:
-            from ..exceptions import ConfigError
+        if (self._native_config.profile_override or self._native_config.requested_arch) and not profile_path:
             profiles_dir = self.config.project_root / "profiles"
             available = [p.name for p in profiles_dir.iterdir()] if profiles_dir.exists() else []
-            raise ConfigError(
-                f"Profile not found: profiles/{self._native_config.profile_override}\n"
-                f"Available profiles: {', '.join(available) if available else '(none)'}"
-            )
-        if self._native_config.requested_arch and not self._native_config.profile_override and not profile_path:
-            from ..exceptions import ConfigError
-            os_name = "windows" if self.config.is_windows else "linux"
+            if self._native_config.profile_override:
+                raise ConfigError(
+                    f"Profile not found: profiles/{self._native_config.profile_override}\n"
+                    f"Available profiles: {', '.join(available) if available else '(none)'}"
+                )
+            os_name = "windows" if IS_WINDOWS else "linux"
             expected = f"{os_name}_{self._native_config.requested_arch}_{self.config.build_type.lower()}"
-            profiles_dir = self.config.project_root / "profiles"
-            available = [p.name for p in profiles_dir.iterdir()] if profiles_dir.exists() else []
             raise ConfigError(
                 f"Arch-qualified profile not found: profiles/{expected}\n"
                 f"Available profiles: {', '.join(available) if available else '(none)'}"

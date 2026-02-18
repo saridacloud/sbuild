@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Extract magic numbers in `BaseRunner` to named class constants (`_PANEL_MAX_LINES`, `_PANEL_HEIGHT`, `_ERROR_TAIL_LINES`, etc.)
+- Extract `_MAX_LOG_FILES` constant in `LogManager` log rotation
+- Simplify error keyword matching in `BaseRunner._show_error_output()` with case-insensitive comparison
+- Narrow bare `except Exception` blocks to specific exception types in `_read_process_output`, `_load_cache`/`_save_cache`, and `DoctorReport.__post_init__`
+- Replace `assert isinstance(...)` with `TypeError` raise in `NativeRunner` and `WasmRunner` constructors
+- Remove unused `**kwargs` parameter from `WasmRunner.serve()`
+- Remove dead `startswith("<")` filter in `LoggingConsole.print()`
+- Add type hints to `BaseRunner._read_process_output()` and `_live_console` property
+
+### Removed
+
+- Unused `VALID_ARCH_VALUES` constant from `config.py`
+- Unused `BuildConfig.is_windows` property (use `IS_WINDOWS` constant instead)
+- Unused public API exports from `__init__.py` (`LoggingConsole`, `PlatformConfig`, `parse_conan_profile_arch`)
+- Redundant `NativeRunner` class-attribute overrides (`supports_tests`, `supports_serve`) identical to `BaseRunner` defaults
+- No-op `NativeRunner._prepare_command()` override
+- Dead `hasattr` branch in `BaseRunner._live_console` property
+
+### Changed
+
+- Consolidate duplicate "build dir not found" guard into `BaseRunner._require_build_dir()` helper
+- Extract `_build_type()` helper in `cli.py` to replace 7 repeated ternary expressions
+- Use `contextlib.chdir` instead of manual `os.chdir`/restore in `BaseRunner.package()` and `serve_common()`
+- Deduplicate profiles-dir listing in `NativeRunner.configure()` error handling
+- Hoist deferred `ConfigError` and `BuildError` imports to module-level in `native.py` and `base.py`
+- Simplify `console.py` by removing unnecessary intermediate variable
+
 ### Added
 
 - `sbuild config` command — shows fully resolved configuration without building

@@ -171,8 +171,6 @@ _FRIENDLY_ARCH_MAP = {
     "arm64": "armv8",
 }
 
-VALID_ARCH_VALUES = list(_FRIENDLY_ARCH_MAP.keys())
-
 
 def normalize_arch(friendly_arch: str) -> str:
     """Convert a friendly architecture name to its Conan equivalent."""
@@ -436,11 +434,6 @@ class BuildConfig:
     def build_preset_name(self) -> str:
         """Return CMake build preset name"""
         return self.platform_config.build_preset_name(self.build_type)
-
-    @property
-    def is_windows(self) -> bool:
-        """Check if running on Windows"""
-        return platform.system() == "Windows"
 
     @property
     def project_name(self) -> str:
