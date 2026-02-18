@@ -60,7 +60,7 @@ class NativeRunner(BaseRunner):
 
     def configure(self) -> bool:
         """Run conan install + cmake configure"""
-        arch = self._native_config.arch
+        arch = self._native_config.target_arch
         profile_path = self._native_config.conan_profile_path
 
         # Validate explicit --profile or --arch when profile file doesn't exist
@@ -131,7 +131,7 @@ class NativeRunner(BaseRunner):
 
         # Architecture section
         arch: list[tuple[str, str]] = []
-        arch.append(("Host architecture", self._native_config.arch))
+        arch.append(("Host architecture", self._native_config.host_arch))
         arch.append(("Target architecture", self._native_config.target_arch))
         if self._native_config.requested_arch:
             arch.append(("Requested arch", self._native_config.requested_arch))

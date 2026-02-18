@@ -229,20 +229,6 @@ class TestNativeConfig:
         with patch("sbuild.config.platform.machine", return_value=machine):
             assert NativeConfig.detect_architecture() == expected
 
-    def test_detect_target_architecture_from_profile(self, tmp_path):
-        profiles = tmp_path / "profiles"
-        profiles.mkdir()
-        profile = profiles / "windows_debug"
-        profile.write_text("[settings]\narch=x86\nos=Windows\n", encoding="utf-8")
-        with patch("sbuild.config.platform.system", return_value="Windows"):
-            arch = NativeConfig.detect_target_architecture(tmp_path, "Debug")
-        assert arch == "x86"
-
-    def test_detect_target_architecture_falls_back_to_host(self, tmp_path):
-        with patch("sbuild.config.platform.machine", return_value="AMD64"):
-            arch = NativeConfig.detect_target_architecture(tmp_path, "Debug")
-        assert arch == "x86_64"
-
 
 # -- WasmConfig ---------------------------------------------------------------
 

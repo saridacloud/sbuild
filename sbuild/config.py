@@ -228,7 +228,7 @@ def resolve_profile_path(
 class NativeConfig(PlatformConfig):
     """Configuration for native (conan + cmake) builds"""
 
-    arch: str = "x86_64"
+    host_arch: str = "x86_64"
     target_arch: str = "x86_64"
     env_vars: dict[str, str] = field(default_factory=dict)
     project_root: Path = field(default_factory=lambda: Path("."))
@@ -246,7 +246,7 @@ class NativeConfig(PlatformConfig):
     ) -> "NativeConfig":
         """Auto-detect native build configuration"""
         config = cls()
-        config.arch = cls.detect_architecture()
+        config.host_arch = cls.detect_architecture()
         config.project_root = project_root or Path(".")
 
         # Load .env first so SBUILD_ARCH is available for profile resolution
@@ -265,7 +265,7 @@ class NativeConfig(PlatformConfig):
         )
 
         # Detect target arch from resolved profile (or fall back to requested/host arch)
-        fallback_arch = normalize_arch(effective_arch) if effective_arch else config.arch
+        fallback_arch = normalize_arch(effective_arch) if effective_arch else config.host_arch
         config.target_arch = cls._detect_target_arch(config.conan_profile_path, fallback_arch)
 
         return config
@@ -278,17 +278,6 @@ class NativeConfig(PlatformConfig):
             if arch:
                 return arch
         return fallback_arch
-
-    @classmethod
-    def detect_target_architecture(cls, project_root: Optional[Path], build_type: str) -> str:
-        """Detect target architecture from Conan profile, falling back to host arch."""
-        if project_root:
-            os_name = "windows" if platform.system() == "Windows" else "linux"
-            profile_path = project_root / "profiles" / f"{os_name}_{build_type.lower()}"
-            arch = parse_conan_profile_arch(profile_path)
-            if arch:
-                return arch
-        return cls.detect_architecture()
 
     @staticmethod
     def detect_architecture() -> str:
