@@ -44,6 +44,7 @@ class BuildSession:
         project_root: Optional[Path] = None,
         arch: Optional[str] = None,
         profile: Optional[str] = None,
+        command: str = "unknown",
     ):
         """Initialize build session.
 
@@ -57,6 +58,7 @@ class BuildSession:
             project_root: Project root directory (auto-detected if None)
             arch: Target architecture (x86, x64, arm64)
             profile: Exact Conan profile name override
+            command: CLI command name (build, rebuild, clean, etc.)
         """
         self.platform = platform
         self.build_type = build_type.capitalize()
@@ -66,6 +68,7 @@ class BuildSession:
         self.build_number = build_number
         self.arch = arch
         self.profile = profile
+        self.command = command
 
         # Auto-detect project root if not provided
         if project_root is None:
@@ -96,20 +99,8 @@ class BuildSession:
         # Create logging console that writes to both console and log file
         self.console = LoggingConsole(base_console, self.log_manager)
 
-        # Log configuration
-        self.log_manager.write_section("CLI Parameters")
-        self.log_manager.write(f"Platform: {self.platform}")
-        self.log_manager.write(f"Build type: {self.build_type}")
-        self.log_manager.write(f"Jobs: {self.jobs}")
-        self.log_manager.write(f"Verbose: {self.verbose}")
-        if self.arch:
-            self.log_manager.write(f"Arch: {self.arch}")
-        if self.profile:
-            self.log_manager.write(f"Profile: {self.profile}")
-        if self.build_number is not None:
-            self.log_manager.write(f"Build number: {self.build_number}")
-        if self.cmake_args:
-            self.log_manager.write(f"CMake args: {self.cmake_args}")
+        # Log command early for crash safety
+        self.log_manager.write(f"Command: sbuild {self.command}")
 
         # Create build configuration (timed)
         t0 = time.perf_counter()
@@ -189,11 +180,13 @@ class BuildSession:
 
         # General info
         self.log_manager.write(f"  sbuild version: {__version__}")
+        self.log_manager.write(f"  Command: {self.command}")
         self.log_manager.write(f"  Project: {self.config.project_name} {self.config.version}")
         self.log_manager.write(f"  Project root: {self.config.project_root}")
         self.log_manager.write(f"  Platform: {self.platform}")
         self.log_manager.write(f"  Build type: {self.build_type}")
         self.log_manager.write(f"  Jobs: {self.jobs}")
+        self.log_manager.write(f"  Verbose: {self.verbose}")
         self.log_manager.write(f"  Build directory: {self.config.build_dir}")
         self.log_manager.write(f"  Configure preset: {self.config.preset_name}")
         self.log_manager.write(f"  Build preset: {self.config.build_preset_name}")
@@ -201,6 +194,8 @@ class BuildSession:
             self.log_manager.write(f"  CMake args: {self.cmake_args}")
         if self.build_number is not None:
             self.log_manager.write(f"  Build number: {self.build_number}")
+        if self.profile:
+            self.log_manager.write(f"  Profile override: {self.profile}")
 
         # Profiling
         if self._config_elapsed is not None:
@@ -221,6 +216,7 @@ class BuildSession:
 
         # General info
         base_console.print(f"[green]sbuild version:[/green] [dim]{__version__}[/dim]")
+        base_console.print(f"[green]Command:[/green] [dim]{self.command}[/dim]")
         base_console.print(
             f"[green]Project:[/green] [dim]{self.config.project_name} {self.config.version}[/dim]"
         )
@@ -252,8 +248,8 @@ class BuildSession:
             for label, value in items:
                 base_console.print(f"  [green]{label}:[/green] [dim]{value}[/dim]")
 
-    def show_header(self, action: str) -> None:
-        """Display build header with action and configuration."""
+    def show_header(self) -> None:
+        """Display build header with command and configuration."""
         if self.config is None or self.console is None:
             return
 
@@ -276,7 +272,7 @@ class BuildSession:
 
         self.console.print(
             Panel(
-                f"{self.config.project_name} - {action.capitalize()} ({mode}{platform_str}{arch_str})",
+                f"{self.config.project_name} - {self.command.capitalize()} ({mode}{platform_str}{arch_str})",
                 expand=False,
             )
         )

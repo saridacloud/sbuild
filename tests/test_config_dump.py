@@ -65,20 +65,36 @@ class TestLogResolvedConfig:
         content = log_path.read_text(encoding="utf-8")
         assert f"sbuild version: {__version__}" in content
 
-    def test_cli_parameters_section_renamed(self, project_root):
-        with BuildSession(project_root=project_root) as session:
+    def test_early_command_log_line(self, project_root):
+        with BuildSession(project_root=project_root, command="build") as session:
             log_path = session.log_path
 
         content = log_path.read_text(encoding="utf-8")
-        assert "CLI Parameters" in content
-        assert "Build Configuration" not in content
+        assert "Command: sbuild build" in content
+        assert "CLI Parameters" not in content
+
+    def test_writes_command_in_resolved_config(self, project_root):
+        with BuildSession(project_root=project_root, command="rebuild") as session:
+            _ = session.runner
+            log_path = session.log_path
+
+        content = log_path.read_text(encoding="utf-8")
+        assert "  Command: rebuild" in content
+
+    def test_writes_verbose_in_resolved_config(self, project_root):
+        with BuildSession(project_root=project_root, verbose=True) as session:
+            _ = session.runner
+            log_path = session.log_path
+
+        content = log_path.read_text(encoding="utf-8")
+        assert "  Verbose: True" in content
 
 
 class TestShowConfigConsole:
     """Test that _show_config_console produces expected output."""
 
     def test_prints_project_info(self, project_root, capsys):
-        with BuildSession(project_root=project_root) as session:
+        with BuildSession(project_root=project_root, command="config") as session:
             _ = session.runner
             session._show_config_console()
 
@@ -86,6 +102,14 @@ class TestShowConfigConsole:
         captured = capsys.readouterr()
         assert "TestProject" in captured.out
         assert "1.2.3" in captured.out
+
+    def test_prints_command(self, project_root, capsys):
+        with BuildSession(project_root=project_root, command="config") as session:
+            _ = session.runner
+            session._show_config_console()
+
+        captured = capsys.readouterr()
+        assert "config" in captured.out
 
     def test_prints_build_directory(self, project_root, capsys):
         with BuildSession(project_root=project_root) as session:
@@ -109,15 +133,15 @@ class TestVerboseShowsConfig:
     """Test that verbose mode shows config in show_header, non-verbose doesn't."""
 
     def test_verbose_shows_config(self, project_root, capsys):
-        with BuildSession(project_root=project_root, verbose=True) as session:
-            session.show_header("build")
+        with BuildSession(project_root=project_root, verbose=True, command="build") as session:
+            session.show_header()
 
         captured = capsys.readouterr()
         assert "sbuild version" in captured.out
 
     def test_non_verbose_hides_config(self, project_root, capsys):
-        with BuildSession(project_root=project_root, verbose=False) as session:
-            session.show_header("build")
+        with BuildSession(project_root=project_root, verbose=False, command="build") as session:
+            session.show_header()
 
         captured = capsys.readouterr()
         assert "sbuild version" not in captured.out

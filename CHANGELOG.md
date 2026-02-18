@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sbuild config` command — shows fully resolved configuration without building
+- `BaseRunner.get_config_summary()` method for runner-specific config reporting
+- `NativeRunner.get_config_summary()` — reports Toolchain, Architecture, and Environment (.env) sections
+- `WasmRunner.get_config_summary()` — reports WASM Toolchain section
+- Resolved config automatically logged to build log file after runner initialization
+- Verbose mode (`-v`) and `sbuild config` display resolved config in console
+- `normalize_arch()` helper function in `config.py`
+- Tests for config dump feature (`tests/test_config_dump.py`)
+- Tests for `normalize_arch()` and corrected architecture fallback behavior
+
+### Fixed
+
+- Target architecture detection now correctly normalizes friendly arch names (e.g. `x64` → `x86_64`) before falling back, fixing incorrect architecture when using `--arch` with profiles that don't specify `arch=`
+
+### Changed
+
+- `BuildSession` now accepts a `command` parameter to track the active CLI command
+- `show_header()` no longer takes an `action` argument — uses `self.command` instead
+- Early CLI parameter logging replaced with single `Command: sbuild {command}` line for crash safety
+- Resolved config log now includes `Command` and `Verbose` fields
+- Console config output now includes `Command` field
+
 ## [1.2.0] - 2026-02-13
 
 ### Added

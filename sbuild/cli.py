@@ -74,16 +74,16 @@ def _do_build(
         arch: Target architecture (x86, x64, arm64)
         profile: Exact Conan profile name override
     """
+    command = "rebuild" if (clean_first and always_configure) else "build"
     with BuildSession(platform, build_type, verbose, jobs, cmake_args, build_number,
-                      arch=arch, profile=profile) as session:
-        action = "rebuild" if (clean_first and always_configure) else "build"
-        session.show_header(action)
+                      arch=arch, profile=profile, command=command) as session:
+        session.show_header()
 
         if clean_first:
             if not session.runner.clean():
                 session.show_failure("clean")
                 session.exit_with_error()
-            if action == "rebuild":
+            if command == "rebuild":
                 session.console.print()
 
         # Configure if forced or if build dir doesn't exist yet
@@ -96,7 +96,7 @@ def _do_build(
             session.show_failure("build")
             session.exit_with_error()
 
-        session.show_success(action)
+        session.show_success(command)
 
 
 def _version_callback(value: bool) -> None:
@@ -219,8 +219,8 @@ def clean(
     """
     build_type = "release" if release else "debug"
 
-    with BuildSession(platform, build_type, arch=arch, profile=profile) as session:
-        session.show_header("clean")
+    with BuildSession(platform, build_type, arch=arch, profile=profile, command="clean") as session:
+        session.show_header()
 
         if session.runner.clean():
             session.show_success("clean")
@@ -252,8 +252,8 @@ def configure(
     build_type = "release" if release else "debug"
 
     with BuildSession(platform, build_type, verbose, cmake_args=cmake_args, build_number=build_number,
-                      arch=arch, profile=profile) as session:
-        session.show_header("configure")
+                      arch=arch, profile=profile, command="configure") as session:
+        session.show_header()
 
         if session.runner.configure():
             session.show_success("configure")
@@ -283,7 +283,7 @@ def install(
     """
     build_type = "release" if release else "debug"
 
-    with BuildSession(platform, build_type, arch=arch, profile=profile) as session:
+    with BuildSession(platform, build_type, arch=arch, profile=profile, command="install") as session:
         if session.runner.install(prefix, component, system_install):
             session.console.print("\n[green]Install complete![/green]")
         else:
@@ -324,7 +324,7 @@ def package(
             _do_build(platform, build_type, jobs, verbose, None, None,
                       clean_first=True, always_configure=True, arch=arch, profile=profile)
 
-        with BuildSession(platform, build_type, arch=arch, profile=profile) as session:
+        with BuildSession(platform, build_type, arch=arch, profile=profile, command="package") as session:
             if session.runner.package(generator):
                 session.console.print("\n[green]Package created![/green]")
             else:
@@ -353,7 +353,7 @@ def serve(
     build_type = "release" if release else "debug"
 
     try:
-        with BuildSession(platform, build_type) as session:
+        with BuildSession(platform, build_type, command="serve") as session:
             if not session.runner.supports_serve:
                 console.print("[red]Error: 'serve' command is not supported for this platform[/red]")
                 console.print("[dim]Usage: sbuild serve --platform wasm[/dim]")
@@ -408,7 +408,7 @@ def show_config(
     build_type = "release" if release else "debug"
 
     try:
-        with BuildSession(platform, build_type, verbose=True, arch=arch, profile=profile) as session:
+        with BuildSession(platform, build_type, verbose=True, arch=arch, profile=profile, command="config") as session:
             # Access runner to trigger full config resolution + log writing
             _ = session.runner
             session._show_config_console()
@@ -445,7 +445,7 @@ def test(
     """
     build_type = "release" if release else "debug"
 
-    with BuildSession(platform, build_type, verbose, jobs, arch=arch, profile=profile) as session:
+    with BuildSession(platform, build_type, verbose, jobs, arch=arch, profile=profile, command="test") as session:
         if not session.runner.supports_tests:
             console.print("[red]Error: Tests are not supported for this platform[/red]")
             raise typer.Exit(1)
