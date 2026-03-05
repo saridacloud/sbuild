@@ -298,7 +298,10 @@ class BaseRunner(ABC):
     def _show_live_panel(self, process, last_lines, title):
         """Show a Rich Live panel tracking process output until it exits"""
         with Live(
-            console=self._live_console, refresh_per_second=4, transient=True
+            console=self._live_console,
+            refresh_per_second=4,
+            transient=True,
+            auto_refresh=False,
         ) as live:
             while process.poll() is None:
                 lines_to_show = (
@@ -319,7 +322,7 @@ class BaseRunner(ABC):
                     height=self._PANEL_HEIGHT,
                 )
 
-                live.update(panel)
+                live.update(panel, refresh=True)
                 time.sleep(0.1)
 
     def run_command(

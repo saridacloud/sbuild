@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Rich Live panel leaving residual border/content lines after transient cleanup by switching to synchronous rendering (`auto_refresh=False` + explicit `refresh=True`)
+
 ### Added
 
 - `ConfigManager` class — single point of config resolution; receives raw CLI args, loads `.env` once, resolves everything via generic `_resolve()` method (CLI > .env > os.environ > default priority), and produces a fully-populated `BuildConfig`

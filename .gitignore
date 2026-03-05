@@ -8,6 +8,7 @@ TEMP.md
 .env
 .env.wasm
 .sbuild/
+.mcp.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
