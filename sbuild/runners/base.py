@@ -19,7 +19,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
 
-from ..config import BuildConfig
+from ..config import BuildConfig, resolve_build_number
 from ..console import console
 from ..exceptions import BuildError
 from ..logging import LogManager
@@ -156,10 +156,10 @@ class BaseRunner(ABC):
                 # Use generator-specific file names since CPACK_IFW_PACKAGE_FILE_NAME
                 # is not reliably respected by CPack at runtime
                 if generator.upper() == "IFW":
-                    build_num = self.config.get_resolved_build_number()
+                    build_num = resolve_build_number(self.config.build_number, self.config.build_dir, self.config.project_root)
                     cmd += f" -D CPACK_PACKAGE_FILE_NAME={self.config.project_name}-{self.config.version}-build{build_num}-{suffix}-ifw"
                 elif generator.upper() == "NSIS":
-                    build_num = self.config.get_resolved_build_number()
+                    build_num = resolve_build_number(self.config.build_number, self.config.build_dir, self.config.project_root)
                     cmd += f" -D CPACK_PACKAGE_FILE_NAME={self.config.project_name}-{self.config.version}-build{build_num}-{suffix}-setup"
 
             desc = "Creating package"

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING:** `resolve_profile_path()` moved from module-level function to `NativeConfig._resolve_profile_path()` static method (no longer a public API)
+- **BREAKING:** `BuildConfig.get_resolved_build_number()` extracted to standalone `resolve_build_number(build_number, build_dir, project_root)` function
+- `NativeConfig.from_env()` classmethod now handles arch resolution, profile detection, and target arch detection (previously in `ConfigManager._build_native_config()`)
+- `WasmConfig.from_env()` classmethod now handles validation and environment dict construction (previously in `ConfigManager._build_wasm_config()`)
+- Architecture maps consolidated from 3 manually-maintained dicts (`_ARCH_MAPPING`, `_FRIENDLY_ARCH_MAP`, `_CONAN_TO_FRIENDLY_MAP`) to single canonical `_ARCH_TABLE` + derived dicts + `_MACHINE_TO_CONAN`
+- `ConfigManager` slimmed from ~237 to ~90 lines — delegates platform config construction to dataclass factory methods
+- Removed unused `platform_config` parameter from `_compute_build_dir()`, `_compute_preset_name()`, `_compute_build_preset_name()`
+- Removed standalone `_strip_quotes()` function — quote stripping inlined where needed
+
+### Added
+
+- `friendly_arch` field on `NativeConfig` — always populated (derived from `--arch` or host architecture), used for display and profile fallback
+- `conan_to_friendly_arch()` helper function — reverse mapping from Conan arch names to friendly equivalents (e.g. `x86_64` → `x64`)
+- Profile fallback for implicit arch — without `--arch`, tries `{os}_{friendly_arch}_{build_type}` profile before falling back to `{os}_{build_type}`
+
+### Removed
+
+- Architecture-isolated build directories — `--arch` no longer creates `build/{arch}/{build_type}` subfolders; build dir is always `build/{build_type}` (switch arch via rebuild)
+
 ### Fixed
 
 - Rich Live panel leaving residual border/content lines after transient cleanup by switching to synchronous rendering (`auto_refresh=False` + explicit `refresh=True`)

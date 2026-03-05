@@ -179,6 +179,7 @@ class TestRunnerConfigSummary:
         labels = [label for label, _ in summary["Architecture"]]
         assert "Host architecture" in labels
         assert "Target architecture" in labels
+        assert "Friendly arch" in labels
 
     def test_base_runner_returns_empty(self):
         from sbuild.runners.base import BaseRunner

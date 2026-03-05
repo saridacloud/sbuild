@@ -10,12 +10,13 @@ from sbuild.config import (
     ConfigManager,
     NativeConfig,
     WasmConfig,
+    conan_to_friendly_arch,
     detect_architecture,
     load_env_file,
     normalize_arch,
     parse_cmake_project_info,
     parse_conan_profile_arch,
-    resolve_profile_path,
+    resolve_build_number,
 )
 from sbuild.exceptions import ConfigError, EnvironmentSetupError
 
@@ -198,20 +199,22 @@ class TestNormalizeArch:
         assert normalize_arch("mips") == "mips"
 
 
-# -- resolve_profile_path -----------------------------------------------------
+# -- NativeConfig._resolve_profile_path (via from_env) ------------------------
 
 class TestResolveProfilePath:
+    """Test profile resolution via NativeConfig._resolve_profile_path."""
+
     def test_default_os_build_type(self, tmp_path):
         profiles = tmp_path / "profiles"
         profiles.mkdir()
         (profiles / "windows_debug").write_text("[settings]\n", encoding="utf-8")
         with patch("sbuild.config.platform.system", return_value="Windows"):
-            result = resolve_profile_path(tmp_path, "Debug")
+            result = NativeConfig._resolve_profile_path(tmp_path, "Debug")
         assert result == profiles / "windows_debug"
 
     def test_default_returns_none_when_missing(self, tmp_path):
         with patch("sbuild.config.platform.system", return_value="Windows"):
-            result = resolve_profile_path(tmp_path, "Debug")
+            result = NativeConfig._resolve_profile_path(tmp_path, "Debug")
         assert result is None
 
     def test_arch_qualified_profile(self, tmp_path):
@@ -219,7 +222,7 @@ class TestResolveProfilePath:
         profiles.mkdir()
         (profiles / "windows_x64_debug").write_text("[settings]\n", encoding="utf-8")
         with patch("sbuild.config.platform.system", return_value="Windows"):
-            result = resolve_profile_path(tmp_path, "Debug", arch="x64")
+            result = NativeConfig._resolve_profile_path(tmp_path, "Debug", arch="x64")
         assert result == profiles / "windows_x64_debug"
 
     def test_arch_returns_none_when_missing(self, tmp_path):
@@ -228,20 +231,20 @@ class TestResolveProfilePath:
         # Only default profile exists, not arch-qualified
         (profiles / "windows_debug").write_text("[settings]\n", encoding="utf-8")
         with patch("sbuild.config.platform.system", return_value="Windows"):
-            result = resolve_profile_path(tmp_path, "Debug", arch="x64")
+            result = NativeConfig._resolve_profile_path(tmp_path, "Debug", arch="x64")
         assert result is None  # Does NOT fall back to default
 
     def test_profile_override(self, tmp_path):
         profiles = tmp_path / "profiles"
         profiles.mkdir()
         (profiles / "my_custom").write_text("[settings]\n", encoding="utf-8")
-        result = resolve_profile_path(tmp_path, "Debug", profile="my_custom")
+        result = NativeConfig._resolve_profile_path(tmp_path, "Debug", profile="my_custom")
         assert result == profiles / "my_custom"
 
     def test_profile_override_returns_none_when_missing(self, tmp_path):
         profiles = tmp_path / "profiles"
         profiles.mkdir()
-        result = resolve_profile_path(tmp_path, "Debug", profile="nonexistent")
+        result = NativeConfig._resolve_profile_path(tmp_path, "Debug", profile="nonexistent")
         assert result is None
 
     def test_profile_takes_precedence_over_arch(self, tmp_path):
@@ -249,7 +252,7 @@ class TestResolveProfilePath:
         profiles.mkdir()
         (profiles / "my_custom").write_text("[settings]\n", encoding="utf-8")
         (profiles / "windows_x64_debug").write_text("[settings]\n", encoding="utf-8")
-        result = resolve_profile_path(tmp_path, "Debug", arch="x64", profile="my_custom")
+        result = NativeConfig._resolve_profile_path(tmp_path, "Debug", arch="x64", profile="my_custom")
         assert result == profiles / "my_custom"
 
     def test_linux_profile_name(self, tmp_path):
@@ -257,7 +260,7 @@ class TestResolveProfilePath:
         profiles.mkdir()
         (profiles / "linux_x86_release").write_text("[settings]\n", encoding="utf-8")
         with patch("sbuild.config.platform.system", return_value="Linux"):
-            result = resolve_profile_path(tmp_path, "Release", arch="x86")
+            result = NativeConfig._resolve_profile_path(tmp_path, "Release", arch="x86")
         assert result == profiles / "linux_x86_release"
 
 
@@ -499,7 +502,7 @@ class TestConfigManagerBuildDir:
         )
         with patch("sbuild.config.platform.system", return_value="Windows"):
             cfg = ConfigManager(project_root=project_root, build_type="Debug", arch="x64").resolve()
-        assert cfg.build_dir == project_root / "build" / "x64" / "Debug"
+        assert cfg.build_dir == project_root / "build" / "Debug"
 
     def test_native_without_arch(self, project_root):
         cfg = ConfigManager(project_root=project_root, build_type="Debug").resolve()
@@ -519,7 +522,7 @@ class TestConfigManagerBuildDir:
             cfg = ConfigManager(
                 project_root=project_root, build_type="Release", arch="x64",
             ).resolve()
-        assert cfg.build_dir == project_root / "build" / "x64" / "Release"
+        assert cfg.build_dir == project_root / "build" / "Release"
 
 
 # -- ConfigManager: preset computation ----------------------------------------
@@ -586,6 +589,7 @@ class TestConfigManagerNativeArch:
         with patch("sbuild.config.platform.system", return_value="Windows"):
             cfg = ConfigManager(project_root=tmp_path, build_type="Debug", arch="x64").resolve()
         assert cfg.platform_config.requested_arch == "x64"
+        assert cfg.platform_config.friendly_arch == "x64"
         assert cfg.platform_config.conan_profile_path == profiles / "windows_x64_debug"
         assert cfg.platform_config.target_arch == "x86_64"
 
@@ -629,9 +633,11 @@ class TestConfigManagerNativeArch:
         (tmp_path / "CMakeLists.txt").write_text(
             "project(Test VERSION 1.0.0)\n", encoding="utf-8"
         )
-        with patch("sbuild.config.platform.system", return_value="Windows"):
+        with patch("sbuild.config.platform.system", return_value="Windows"), \
+             patch("sbuild.config.detect_architecture", return_value="x86_64"):
             cfg = ConfigManager(project_root=tmp_path, build_type="Debug").resolve()
         assert cfg.platform_config.requested_arch is None
+        assert cfg.platform_config.friendly_arch == "x64"
         assert cfg.platform_config.conan_profile_path == profiles / "windows_debug"
 
     def test_cli_arch_overrides_env_arch(self, tmp_path):
@@ -655,9 +661,11 @@ class TestConfigManagerNativeArch:
         profiles.mkdir()
         profile = profiles / "windows_debug"
         profile.write_text("[settings]\narch=x86\nos=Windows\n", encoding="utf-8")
-        with patch("sbuild.config.platform.system", return_value="Windows"):
+        with patch("sbuild.config.platform.system", return_value="Windows"), \
+             patch("sbuild.config.detect_architecture", return_value="x86_64"):
             cfg = ConfigManager(project_root=project_root, build_type="Debug").resolve()
         assert cfg.platform_config.target_arch == "x86"
+        assert cfg.platform_config.friendly_arch == "x64"
 
 
 # -- ConfigManager: arch regression tests ------------------------------------
@@ -760,35 +768,32 @@ class TestConfigManagerWasm:
         assert cfg.build_preset_name == "wasm-debug"
 
 
-# -- BuildConfig: get_resolved_build_number -----------------------------------
+# -- resolve_build_number (standalone function) --------------------------------
 
-class TestBuildConfigBuildNumber:
-    def test_override_returns_override(self, project_root):
-        cfg = ConfigManager(project_root=project_root, build_number=42).resolve()
-        assert cfg.get_resolved_build_number() == 42
+class TestResolveBuildNumber:
+    def test_override_returns_override(self, tmp_path):
+        assert resolve_build_number(42, tmp_path / "build", tmp_path) == 42
 
-    def test_version_h_parsing(self, project_root):
-        cfg = ConfigManager(project_root=project_root, build_type="Debug").resolve()
-        gen_dir = cfg.build_dir / "generated"
+    def test_version_h_parsing(self, tmp_path):
+        build_dir = tmp_path / "build" / "Debug"
+        gen_dir = build_dir / "generated"
         gen_dir.mkdir(parents=True)
         version_h = gen_dir / "version.h"
         version_h.write_text(
             '#define APP_VERSION_BUILD 99\n', encoding="utf-8"
         )
-        assert cfg.get_resolved_build_number() == 99
+        assert resolve_build_number(None, build_dir, tmp_path) == 99
 
-    def test_git_fallback(self, project_root):
-        cfg = ConfigManager(project_root=project_root, build_type="Debug").resolve()
+    def test_git_fallback(self, tmp_path):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="157\n")
-            result = cfg.get_resolved_build_number()
+            result = resolve_build_number(None, tmp_path / "build", tmp_path)
             assert result == 157
 
-    def test_failure_returns_zero(self, project_root):
-        cfg = ConfigManager(project_root=project_root, build_type="Debug").resolve()
+    def test_failure_returns_zero(self, tmp_path):
         import subprocess
         with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "git")):
-            result = cfg.get_resolved_build_number()
+            result = resolve_build_number(None, tmp_path / "build", tmp_path)
             assert result == 0
 
 
@@ -802,6 +807,7 @@ class TestNativeConfigDataHolder:
         assert cfg.host_arch == "x86_64"
         assert cfg.target_arch == "x86_64"
         assert cfg.requested_arch is None
+        assert cfg.friendly_arch == "x64"
         assert cfg.env_vars == {}
 
     def test_frozen(self):
@@ -843,3 +849,92 @@ class TestWasmConfigDataHolder:
         )
         assert cfg.qt_host_path == tmp_path / "host"
         assert "EMSDK" in cfg.environment
+
+
+# -- conan_to_friendly_arch ---------------------------------------------------
+
+class TestConanToFriendlyArch:
+    def test_x86_64_to_x64(self):
+        assert conan_to_friendly_arch("x86_64") == "x64"
+
+    def test_x86_passthrough(self):
+        assert conan_to_friendly_arch("x86") == "x86"
+
+    def test_armv8_to_arm64(self):
+        assert conan_to_friendly_arch("armv8") == "arm64"
+
+    def test_armv7_to_arm(self):
+        assert conan_to_friendly_arch("armv7") == "arm"
+
+    def test_unknown_passthrough(self):
+        assert conan_to_friendly_arch("mips") == "mips"
+
+
+# -- friendly_arch derived from host ------------------------------------------
+
+class TestFriendlyArchFromHost:
+    def test_friendly_arch_from_x86_64_host(self, project_root):
+        with patch("sbuild.config.detect_architecture", return_value="x86_64"):
+            cfg = ConfigManager(project_root=project_root).resolve()
+        assert cfg.platform_config.friendly_arch == "x64"
+
+    def test_friendly_arch_from_armv8_host(self, project_root):
+        with patch("sbuild.config.detect_architecture", return_value="armv8"):
+            cfg = ConfigManager(project_root=project_root).resolve()
+        assert cfg.platform_config.friendly_arch == "arm64"
+
+    def test_friendly_arch_from_x86_host(self, project_root):
+        with patch("sbuild.config.detect_architecture", return_value="x86"):
+            cfg = ConfigManager(project_root=project_root).resolve()
+        assert cfg.platform_config.friendly_arch == "x86"
+
+
+# -- profile fallback with arch-qualified names --------------------------------
+
+class TestProfileFallbackArchQualified:
+    def test_profile_fallback_arch_qualified_first(self, tmp_path):
+        """Without --arch, finds arch-qualified profile before unqualified."""
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_x64_debug").write_text("[settings]\narch=x86_64\n", encoding="utf-8")
+        (profiles / "windows_debug").write_text("[settings]\narch=x86_64\n", encoding="utf-8")
+        (tmp_path / "CMakeLists.txt").write_text("project(T VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"), \
+             patch("sbuild.config.detect_architecture", return_value="x86_64"):
+            cfg = ConfigManager(project_root=tmp_path, build_type="Debug").resolve()
+        assert cfg.platform_config.conan_profile_path == profiles / "windows_x64_debug"
+
+    def test_profile_fallback_to_unqualified(self, tmp_path):
+        """Without --arch, falls back to unqualified profile when arch-qualified missing."""
+        profiles = tmp_path / "profiles"
+        profiles.mkdir()
+        (profiles / "windows_debug").write_text("[settings]\narch=x86_64\n", encoding="utf-8")
+        (tmp_path / "CMakeLists.txt").write_text("project(T VERSION 1.0.0)\n", encoding="utf-8")
+        with patch("sbuild.config.platform.system", return_value="Windows"), \
+             patch("sbuild.config.detect_architecture", return_value="x86_64"):
+            cfg = ConfigManager(project_root=tmp_path, build_type="Debug").resolve()
+        assert cfg.platform_config.conan_profile_path == profiles / "windows_debug"
+
+
+# -- preset resolution with presets file ---------------------------------------
+
+class TestPresetResolutionWithFile:
+    def test_preset_found_in_json(self, project_root):
+        import json
+        presets = {
+            "version": 4,
+            "configurePresets": [{"name": "conan-debug"}, {"name": "conan-release"}],
+        }
+        (project_root / "CMakeUserPresets.json").write_text(json.dumps(presets))
+        cfg = ConfigManager(project_root=project_root, build_type="Debug").resolve()
+        assert cfg.preset_name == "conan-debug"
+
+    def test_fallback_to_default_when_type_missing(self, project_root):
+        import json
+        presets = {
+            "version": 4,
+            "configurePresets": [{"name": "conan-default"}],
+        }
+        (project_root / "CMakeUserPresets.json").write_text(json.dumps(presets))
+        cfg = ConfigManager(project_root=project_root, build_type="Debug").resolve()
+        assert cfg.preset_name == "conan-default"

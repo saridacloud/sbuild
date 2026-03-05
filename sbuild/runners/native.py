@@ -124,6 +124,7 @@ class NativeRunner(BaseRunner):
         arch: list[tuple[str, str]] = []
         arch.append(("Host architecture", self._native_config.host_arch))
         arch.append(("Target architecture", self._native_config.target_arch))
+        arch.append(("Friendly arch", self._native_config.friendly_arch))
         if self._native_config.requested_arch:
             arch.append(("Requested arch", self._native_config.requested_arch))
         if self._native_config.profile_override:
