@@ -15,7 +15,7 @@ from typing import Optional
 from .exceptions import ConfigError, EnvironmentSetupError
 
 
-# --- Utility functions ---
+# --- Section 1: File Parsers ---
 
 
 def load_env_file(env_file: Path) -> dict[str, str]:
@@ -123,7 +123,16 @@ def _resolve_configure_preset(project_root: Path, build_type: str) -> str:
     return conventional
 
 
-_ARCH_MAPPING = {
+# --- Section 2: Architecture ---
+
+
+# Canonical table: (friendly, conan)
+_ARCH_TABLE = [("x86", "x86"), ("x64", "x86_64"), ("arm64", "armv8"), ("arm", "armv7")]
+_FRIENDLY_TO_CONAN = {f: c for f, c in _ARCH_TABLE}
+_CONAN_TO_FRIENDLY = {c: f for f, c in _ARCH_TABLE}
+
+# platform.machine() -> conan arch
+_MACHINE_TO_CONAN = {
     "amd64": "x86_64",
     "x86_64": "x86_64",
     "i386": "x86",
@@ -137,82 +146,58 @@ _ARCH_MAPPING = {
     "armv6": "armv6",
 }
 
-_FRIENDLY_ARCH_MAP = {
-    "x86": "x86",
-    "x64": "x86_64",
-    "arm64": "armv8",
-}
-
-
-_CONAN_TO_FRIENDLY_MAP = {
-    "x86_64": "x64",
-    "x86": "x86",
-    "armv8": "arm64",
-    "armv7": "arm",
-    "armv6": "arm",
-}
-
 
 def normalize_arch(friendly_arch: str) -> str:
     """Convert a friendly architecture name to its Conan equivalent."""
-    return _FRIENDLY_ARCH_MAP.get(friendly_arch, friendly_arch)
+    return _FRIENDLY_TO_CONAN.get(friendly_arch, friendly_arch)
 
 
 def conan_to_friendly_arch(conan_arch: str) -> str:
     """Convert a Conan architecture name to its friendly equivalent."""
-    return _CONAN_TO_FRIENDLY_MAP.get(conan_arch, conan_arch)
+    return _CONAN_TO_FRIENDLY.get(conan_arch, conan_arch)
 
 
 def detect_architecture() -> str:
     """Detect system architecture and return Conan architecture string."""
     machine = platform.machine().lower()
-    return _ARCH_MAPPING.get(machine, machine)
+    return _MACHINE_TO_CONAN.get(machine, machine)
 
 
-def _strip_quotes(value: str) -> str:
-    """Strip matching surrounding quotes from a string."""
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-        return value[1:-1]
-    return value
+# --- Section 3: Data Holders ---
 
 
-def resolve_profile_path(
-    project_root: Path,
-    build_type: str,
-    arch: str | None = None,
-    profile: str | None = None,
-    fallback_friendly_arch: str | None = None,
-) -> Path | None:
-    """Resolve the Conan profile path.
+def resolve_build_number(build_number: int | None, build_dir: Path, project_root: Path) -> int:
+    """Return resolved build number from generated version.h or CLI override.
 
-    Priority: --profile > --arch > fallback_friendly_arch > default (os_buildtype).
-    Returns None if no matching profile file exists.
+    Priority: CLI override > version.h in build dir > git commit count > 0.
     """
-    profiles_dir = project_root / "profiles"
-    os_name = "windows" if platform.system() == "Windows" else "linux"
+    import re
 
-    if profile:
-        path = profiles_dir / profile
-        return path if path.exists() else None
+    # CLI override takes precedence
+    if build_number is not None:
+        return build_number
 
-    if arch:
-        path = profiles_dir / f"{os_name}_{arch}_{build_type.lower()}"
-        if path.exists():
-            return path
-        return None  # Don't fall back — explicit arch must match
+    # Read from generated version.h (single source of truth after configure)
+    version_h = build_dir / "generated" / "version.h"
+    if version_h.exists():
+        content = version_h.read_text(encoding="utf-8")
+        match = re.search(r"#define\s+\w*VERSION_BUILD\s+(\d+)", content)
+        if match:
+            return int(match.group(1))
 
-    # No explicit arch: try arch-qualified profile first, then fall back to unqualified
-    if fallback_friendly_arch:
-        path = profiles_dir / f"{os_name}_{fallback_friendly_arch}_{build_type.lower()}"
-        if path.exists():
-            return path
-
-    # Default: {os}_{build_type}
-    path = profiles_dir / f"{os_name}_{build_type.lower()}"
-    return path if path.exists() else None
-
-
-# --- Pure data holders ---
+    # Fallback: calculate from git if version.h doesn't exist yet
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return int(result.stdout.strip())
+    except (subprocess.CalledProcessError, ValueError):
+        return 0
 
 
 @dataclass(frozen=True)
@@ -227,6 +212,91 @@ class NativeConfig:
     profile_override: str | None = None
     env_vars: dict[str, str] = field(default_factory=dict)
 
+    @classmethod
+    def from_env(
+        cls,
+        project_root: Path,
+        build_type: str,
+        env_vars: dict[str, str],
+        cli_arch: str | None = None,
+        cli_profile: str | None = None,
+    ) -> "NativeConfig":
+        """Build NativeConfig with arch resolution and profile detection."""
+        host_arch = detect_architecture()
+
+        # Resolve effective arch (CLI > .env > system env)
+        effective_arch = cli_arch or env_vars.get("SBUILD_ARCH") or os.environ.get("SBUILD_ARCH")
+
+        # Compute friendly_arch: explicit arch wins, otherwise derive from host
+        friendly_arch = effective_arch if effective_arch else conan_to_friendly_arch(host_arch)
+
+        # Resolve profile path
+        conan_profile_path = cls._resolve_profile_path(
+            project_root, build_type,
+            arch=effective_arch, profile=cli_profile,
+            fallback_friendly_arch=friendly_arch if not effective_arch else None,
+        )
+
+        # Detect target arch from resolved profile (or fall back to requested/host arch)
+        fallback_arch = normalize_arch(effective_arch) if effective_arch else host_arch
+        target_arch = fallback_arch
+        if conan_profile_path and conan_profile_path.exists():
+            arch = parse_conan_profile_arch(conan_profile_path)
+            if arch:
+                target_arch = arch
+
+        # Build merged env_vars: .env values + SBUILD_ vars from os.environ as fallback
+        merged_env = dict(env_vars)
+        for key, value in os.environ.items():
+            if key.startswith("SBUILD_") and key not in merged_env:
+                merged_env[key] = value
+
+        return cls(
+            host_arch=host_arch,
+            target_arch=target_arch,
+            requested_arch=effective_arch,
+            friendly_arch=friendly_arch,
+            conan_profile_path=conan_profile_path,
+            profile_override=cli_profile,
+            env_vars=merged_env,
+        )
+
+    @staticmethod
+    def _resolve_profile_path(
+        project_root: Path,
+        build_type: str,
+        arch: str | None = None,
+        profile: str | None = None,
+        fallback_friendly_arch: str | None = None,
+    ) -> Path | None:
+        """Resolve the Conan profile path.
+
+        Priority: --profile > --arch > fallback_friendly_arch > default (os_buildtype).
+        Returns None if no matching profile file exists.
+        """
+        profiles_dir = project_root / "profiles"
+        os_name = "windows" if platform.system() == "Windows" else "linux"
+
+        if profile:
+            path = profiles_dir / profile
+            return path if path.exists() else None
+
+        if arch:
+            path = profiles_dir / f"{os_name}_{arch}_{build_type.lower()}"
+            if path.exists():
+                return path
+            return None  # Don't fall back — explicit arch must match
+
+        # No explicit arch: try arch-qualified profile first, then fall back to unqualified
+        if fallback_friendly_arch:
+            path = profiles_dir / f"{os_name}_{fallback_friendly_arch}_{build_type.lower()}"
+            if path.exists():
+                return path
+
+        # Default: {os}_{build_type}
+        path = profiles_dir / f"{os_name}_{build_type.lower()}"
+        return path if path.exists() else None
+
 
 @dataclass(frozen=True)
 class WasmConfig:
@@ -237,6 +307,63 @@ class WasmConfig:
     qt_host_path: Path | None = None
     openssl_root_dir: Path | None = None
     environment: dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_env(cls, env_vars: dict[str, str]) -> "WasmConfig":
+        """Build WasmConfig from env vars with validation."""
+        required = {"EMSDK": "EMSDK", "SBUILD_WASM_QT_PATH": "SBUILD_WASM_QT_PATH"}
+        missing = [name for name in required if name not in env_vars]
+        if missing:
+            raise ConfigError(
+                f"Missing required WASM variables in .env: {', '.join(missing)}\n"
+                "Required variables:\n"
+                "  EMSDK=<path to emsdk>\n"
+                "  SBUILD_WASM_QT_PATH=<path to Qt WASM>"
+            )
+
+        emsdk_path = Path(env_vars["EMSDK"])
+        qt_wasm_path = Path(env_vars["SBUILD_WASM_QT_PATH"])
+        qt_host_path = (
+            Path(env_vars["SBUILD_WASM_QT_HOST_PATH"])
+            if "SBUILD_WASM_QT_HOST_PATH" in env_vars
+            else None
+        )
+        openssl_root_dir = (
+            Path(env_vars["SBUILD_WASM_OPENSSL_ROOT_DIR"])
+            if "SBUILD_WASM_OPENSSL_ROOT_DIR" in env_vars
+            else None
+        )
+
+        # Validate paths
+        errors = []
+        if not emsdk_path.exists():
+            errors.append(f"EMSDK path not found: {emsdk_path}")
+        if not qt_wasm_path.exists():
+            errors.append(f"SBUILD_WASM_QT_PATH not found: {qt_wasm_path}")
+        if qt_host_path is not None and not qt_host_path.exists():
+            errors.append(f"SBUILD_WASM_QT_HOST_PATH not found: {qt_host_path}")
+        if openssl_root_dir and not openssl_root_dir.exists():
+            errors.append(f"SBUILD_WASM_OPENSSL_ROOT_DIR not found: {openssl_root_dir}")
+        if errors:
+            raise EnvironmentSetupError(
+                "Invalid WASM configuration:\n  " + "\n  ".join(errors)
+            )
+
+        # Pre-compute environment dict for subprocess
+        environment: dict[str, str] = {
+            "EMSDK": str(emsdk_path),
+            "QT_WASM_PATH": str(qt_wasm_path),
+        }
+        if qt_host_path is not None:
+            environment["QT_HOST_PATH"] = str(qt_host_path)
+
+        return cls(
+            emsdk_path=emsdk_path,
+            qt_wasm_path=qt_wasm_path,
+            qt_host_path=qt_host_path,
+            openssl_root_dir=openssl_root_dir,
+            environment=environment,
+        )
 
 
 @dataclass(frozen=True)
@@ -260,38 +387,8 @@ class BuildConfig:
     env_vars: dict[str, str] = field(default_factory=dict)
     platform_config: "NativeConfig | WasmConfig" = field(default_factory=NativeConfig)
 
-    def get_resolved_build_number(self) -> int:
-        """Return resolved build number from generated version.h or CLI override."""
-        import re
 
-        # CLI override takes precedence
-        if self.build_number is not None:
-            return self.build_number
-
-        # Read from generated version.h (single source of truth after configure)
-        version_h = self.build_dir / "generated" / "version.h"
-        if version_h.exists():
-            content = version_h.read_text(encoding="utf-8")
-            match = re.search(r"#define\s+\w*VERSION_BUILD\s+(\d+)", content)
-            if match:
-                return int(match.group(1))
-
-        # Fallback: calculate from git if version.h doesn't exist yet
-        import subprocess
-        try:
-            result = subprocess.run(
-                ["git", "rev-list", "--count", "HEAD"],
-                cwd=self.project_root,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return int(result.stdout.strip())
-        except (subprocess.CalledProcessError, ValueError):
-            return 0
-
-
-# --- ConfigManager ---
+# --- Section 4: ConfigManager ---
 
 
 _UNSET = object()
@@ -350,18 +447,20 @@ class ConfigManager:
         # 2. Merged value: cmake_args
         cmake_args = self._resolve_cmake_args(platform_name)
 
-        # 3. Platform-specific config
+        # 3. Platform-specific config (delegated to dataclass factory methods)
         if platform_name == "wasm":
-            platform_config = self._build_wasm_config()
+            platform_config = WasmConfig.from_env(self._env)
         elif platform_name == "native":
-            platform_config = self._build_native_config(build_type)
+            platform_config = NativeConfig.from_env(
+                self._project_root, build_type, self._env,
+                cli_arch=self._cli.get("arch"),
+                cli_profile=self._cli.get("profile"),
+            )
         else:
             raise ConfigError(f"Unknown platform: {platform_name}")
 
         # 4. Derived values
-        build_dir = self._compute_build_dir(
-            platform_name, platform_config, build_type, build_dir_base,
-        )
+        build_dir = self._compute_build_dir(platform_name, build_type, build_dir_base)
         preset_name = self._compute_preset_name(platform_name, build_type)
         build_preset_name = self._compute_build_preset_name(platform_name, build_type)
         project_name, version = parse_cmake_project_info(
@@ -392,12 +491,14 @@ class ConfigManager:
         parts: list[str] = []
         universal = self._env.get("SBUILD_CMAKE_ARGS", "").strip()
         if universal:
-            universal = _strip_quotes(universal)
+            if len(universal) >= 2 and universal[0] == universal[-1] and universal[0] in ('"', "'"):
+                universal = universal[1:-1]
             parts.append(universal)
         if platform_name == "wasm":
             wasm_args = self._env.get("SBUILD_WASM_CMAKE_ARGS", "").strip()
             if wasm_args:
-                wasm_args = _strip_quotes(wasm_args)
+                if len(wasm_args) >= 2 and wasm_args[0] == wasm_args[-1] and wasm_args[0] in ('"', "'"):
+                    wasm_args = wasm_args[1:-1]
                 parts.append(wasm_args)
         cli_cmake_args = self._cli.get("cmake_args")
         if cli_cmake_args:
@@ -406,116 +507,7 @@ class ConfigManager:
                 parts.append(cli_cmake_args)
         return " ".join(parts) if parts else None
 
-    def _build_native_config(self, build_type: str) -> NativeConfig:
-        """Build NativeConfig with arch resolution and profile detection."""
-        host_arch = detect_architecture()
-
-        # Resolve effective arch (CLI > .env > system env)
-        effective_arch = self._resolve("SBUILD_ARCH", self._cli.get("arch"))
-
-        # Compute friendly_arch: explicit arch wins, otherwise derive from host
-        friendly_arch = effective_arch if effective_arch else conan_to_friendly_arch(host_arch)
-
-        # Resolve profile path
-        profile_override = self._cli.get("profile")
-        conan_profile_path = resolve_profile_path(
-            self._project_root, build_type,
-            arch=effective_arch, profile=profile_override,
-            fallback_friendly_arch=friendly_arch if not effective_arch else None,
-        )
-
-        # Detect target arch from resolved profile (or fall back to requested/host arch)
-        fallback_arch = normalize_arch(effective_arch) if effective_arch else host_arch
-        target_arch = self._detect_target_arch(conan_profile_path, fallback_arch)
-
-        # Build merged env_vars: .env values + SBUILD_ vars from os.environ as fallback
-        env_vars = dict(self._env)
-        for key, value in os.environ.items():
-            if key.startswith("SBUILD_") and key not in env_vars:
-                env_vars[key] = value
-
-        return NativeConfig(
-            host_arch=host_arch,
-            target_arch=target_arch,
-            requested_arch=effective_arch,
-            friendly_arch=friendly_arch,
-            conan_profile_path=conan_profile_path,
-            profile_override=profile_override,
-            env_vars=env_vars,
-        )
-
-    @staticmethod
-    def _detect_target_arch(profile_path: Path | None, fallback_arch: str) -> str:
-        """Detect target architecture from Conan profile, falling back to fallback_arch."""
-        if profile_path and profile_path.exists():
-            arch = parse_conan_profile_arch(profile_path)
-            if arch:
-                return arch
-        return fallback_arch
-
-    def _build_wasm_config(self) -> WasmConfig:
-        """Build WasmConfig from env vars with validation."""
-        required = {"EMSDK": "EMSDK", "SBUILD_WASM_QT_PATH": "SBUILD_WASM_QT_PATH"}
-        missing = [name for name in required if name not in self._env]
-        if missing:
-            raise ConfigError(
-                f"Missing required WASM variables in .env: {', '.join(missing)}\n"
-                "Required variables:\n"
-                "  EMSDK=<path to emsdk>\n"
-                "  SBUILD_WASM_QT_PATH=<path to Qt WASM>"
-            )
-
-        emsdk_path = Path(self._env["EMSDK"])
-        qt_wasm_path = Path(self._env["SBUILD_WASM_QT_PATH"])
-        qt_host_path = (
-            Path(self._env["SBUILD_WASM_QT_HOST_PATH"])
-            if "SBUILD_WASM_QT_HOST_PATH" in self._env
-            else None
-        )
-        openssl_root_dir = (
-            Path(self._env["SBUILD_WASM_OPENSSL_ROOT_DIR"])
-            if "SBUILD_WASM_OPENSSL_ROOT_DIR" in self._env
-            else None
-        )
-
-        # Validate paths
-        errors = []
-        if not emsdk_path.exists():
-            errors.append(f"EMSDK path not found: {emsdk_path}")
-        if not qt_wasm_path.exists():
-            errors.append(f"SBUILD_WASM_QT_PATH not found: {qt_wasm_path}")
-        if qt_host_path is not None and not qt_host_path.exists():
-            errors.append(f"SBUILD_WASM_QT_HOST_PATH not found: {qt_host_path}")
-        if openssl_root_dir and not openssl_root_dir.exists():
-            errors.append(f"SBUILD_WASM_OPENSSL_ROOT_DIR not found: {openssl_root_dir}")
-        if errors:
-            raise EnvironmentSetupError(
-                "Invalid WASM configuration:\n  " + "\n  ".join(errors)
-            )
-
-        # Pre-compute environment dict for subprocess
-        environment: dict[str, str] = {
-            "EMSDK": str(emsdk_path),
-            "QT_WASM_PATH": str(qt_wasm_path),
-        }
-        if qt_host_path is not None:
-            environment["QT_HOST_PATH"] = str(qt_host_path)
-
-        return WasmConfig(
-            emsdk_path=emsdk_path,
-            qt_wasm_path=qt_wasm_path,
-            qt_host_path=qt_host_path,
-            openssl_root_dir=openssl_root_dir,
-            environment=environment,
-        )
-
-    def _compute_build_dir(
-        self,
-        platform_name: str,
-        platform_config: "NativeConfig | WasmConfig",
-        build_type: str,
-        build_dir_base: str,
-    ) -> Path:
+    def _compute_build_dir(self, platform_name: str, build_type: str, build_dir_base: str) -> Path:
         """Compute the build directory path."""
         if platform_name == "wasm":
             dir_name = f"wasm-{build_type.lower()}"
