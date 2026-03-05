@@ -144,9 +144,23 @@ _FRIENDLY_ARCH_MAP = {
 }
 
 
+_CONAN_TO_FRIENDLY_MAP = {
+    "x86_64": "x64",
+    "x86": "x86",
+    "armv8": "arm64",
+    "armv7": "arm",
+    "armv6": "arm",
+}
+
+
 def normalize_arch(friendly_arch: str) -> str:
     """Convert a friendly architecture name to its Conan equivalent."""
     return _FRIENDLY_ARCH_MAP.get(friendly_arch, friendly_arch)
+
+
+def conan_to_friendly_arch(conan_arch: str) -> str:
+    """Convert a Conan architecture name to its friendly equivalent."""
+    return _CONAN_TO_FRIENDLY_MAP.get(conan_arch, conan_arch)
 
 
 def detect_architecture() -> str:
@@ -167,10 +181,11 @@ def resolve_profile_path(
     build_type: str,
     arch: str | None = None,
     profile: str | None = None,
+    fallback_friendly_arch: str | None = None,
 ) -> Path | None:
     """Resolve the Conan profile path.
 
-    Priority: --profile > --arch > default (os_buildtype).
+    Priority: --profile > --arch > fallback_friendly_arch > default (os_buildtype).
     Returns None if no matching profile file exists.
     """
     profiles_dir = project_root / "profiles"
@@ -185,6 +200,12 @@ def resolve_profile_path(
         if path.exists():
             return path
         return None  # Don't fall back — explicit arch must match
+
+    # No explicit arch: try arch-qualified profile first, then fall back to unqualified
+    if fallback_friendly_arch:
+        path = profiles_dir / f"{os_name}_{fallback_friendly_arch}_{build_type.lower()}"
+        if path.exists():
+            return path
 
     # Default: {os}_{build_type}
     path = profiles_dir / f"{os_name}_{build_type.lower()}"
@@ -201,6 +222,7 @@ class NativeConfig:
     host_arch: str = "x86_64"
     target_arch: str = "x86_64"
     requested_arch: str | None = None
+    friendly_arch: str = "x64"  # Always populated — used for display and profile fallback
     conan_profile_path: Path | None = None
     profile_override: str | None = None
     env_vars: dict[str, str] = field(default_factory=dict)
@@ -391,11 +413,15 @@ class ConfigManager:
         # Resolve effective arch (CLI > .env > system env)
         effective_arch = self._resolve("SBUILD_ARCH", self._cli.get("arch"))
 
+        # Compute friendly_arch: explicit arch wins, otherwise derive from host
+        friendly_arch = effective_arch if effective_arch else conan_to_friendly_arch(host_arch)
+
         # Resolve profile path
         profile_override = self._cli.get("profile")
         conan_profile_path = resolve_profile_path(
             self._project_root, build_type,
             arch=effective_arch, profile=profile_override,
+            fallback_friendly_arch=friendly_arch if not effective_arch else None,
         )
 
         # Detect target arch from resolved profile (or fall back to requested/host arch)
@@ -412,6 +438,7 @@ class ConfigManager:
             host_arch=host_arch,
             target_arch=target_arch,
             requested_arch=effective_arch,
+            friendly_arch=friendly_arch,
             conan_profile_path=conan_profile_path,
             profile_override=profile_override,
             env_vars=env_vars,
@@ -493,11 +520,7 @@ class ConfigManager:
         if platform_name == "wasm":
             dir_name = f"wasm-{build_type.lower()}"
         else:
-            native = platform_config
-            if native.requested_arch:
-                dir_name = f"{native.requested_arch}/{build_type}"
-            else:
-                dir_name = build_type
+            dir_name = build_type
         return self._project_root / build_dir_base / dir_name
 
     def _compute_preset_name(self, platform_name: str, build_type: str) -> str:

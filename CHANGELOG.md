@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `friendly_arch` field on `NativeConfig` — always populated (derived from `--arch` or host architecture), used for display and profile fallback
+- `conan_to_friendly_arch()` helper function — reverse mapping from Conan arch names to friendly equivalents (e.g. `x86_64` → `x64`)
+- Profile fallback for implicit arch — without `--arch`, tries `{os}_{friendly_arch}_{build_type}` profile before falling back to `{os}_{build_type}`
+
+### Removed
+
+- Architecture-isolated build directories — `--arch` no longer creates `build/{arch}/{build_type}` subfolders; build dir is always `build/{build_type}` (switch arch via rebuild)
+
 ### Fixed
 
 - Rich Live panel leaving residual border/content lines after transient cleanup by switching to synchronous rendering (`auto_refresh=False` + explicit `refresh=True`)
