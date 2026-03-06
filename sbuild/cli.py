@@ -303,6 +303,9 @@ def install(
     prefix: Annotated[Optional[Path], typer.Option(help="Installation prefix")] = None,
     component: Annotated[Optional[str], typer.Option(help="Component to install")] = None,
     system_install: Annotated[bool, typer.Option("--system-install", help="Install to system location")] = False,
+    fresh: Annotated[bool, typer.Option("--fresh", help="Clean rebuild before installing")] = False,
+    verbose: VerboseOpt = None,
+    jobs: JobsOpt = None,
     arch: ArchOpt = None,
     profile: ProfileOpt = None,
 ):
@@ -314,12 +317,16 @@ def install(
       [cyan]sbuild install[/cyan]                  Install debug to ./install/Debug
       [cyan]sbuild install --release[/cyan]        Install release to ./install/Release
       [cyan]sbuild install --prefix dist[/cyan]    Install to custom directory
+      [cyan]sbuild install --fresh[/cyan]          Clean rebuild then install
     """
     config = _create_config(
         _build_type(release),
         platform=platform, arch=arch, profile=profile,
-        install_prefix=prefix,
+        install_prefix=prefix, verbose=verbose, jobs=jobs,
     )
+    if fresh:
+        _do_build(config, clean_first=True, always_configure=True)
+
     with BuildSession(config, command="install") as session:
         if session.runner.install(config.install_prefix, component, system_install):
             session.console.print("\n[green]Install complete![/green]")

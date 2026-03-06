@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--fresh` option for `sbuild install` — clean rebuild before installing (mirrors `sbuild package --fresh`)
 - `friendly_arch` field on `NativeConfig` — always populated (derived from `--arch` or host architecture), used for display and profile fallback
 - `conan_to_friendly_arch()` helper function — reverse mapping from Conan arch names to friendly equivalents (e.g. `x86_64` → `x64`)
 - Profile fallback for implicit arch — without `--arch`, tries `{os}_{friendly_arch}_{build_type}` profile before falling back to `{os}_{build_type}`
