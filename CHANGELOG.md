@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `UnicodeDecodeError` crash in build output reader thread when compiler output contains non-UTF-8 bytes (e.g. `0xb0` degree symbol on Linux) — subprocess pipes now use `errors="replace"` to substitute invalid bytes
+
 ### Added
 
 - **Tool Versions** section in config dump — `sbuild config`, verbose mode, and build logs now show detected versions of Python, CMake, Conan, Git, and Ninja (native) or emcc (WASM)

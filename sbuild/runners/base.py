@@ -222,6 +222,7 @@ class BaseRunner(ABC):
                 bufsize=1,
                 universal_newlines=True,
                 env=env,
+                errors="replace",
             )
 
             reader_thread = threading.Thread(
@@ -291,7 +292,7 @@ class BaseRunner(ABC):
                     all_lines.append(stripped_line)
                     if self.log_manager:
                         self.log_manager.write(f"  {stripped_line}")
-        except (IOError, OSError):
+        except (IOError, OSError, ValueError):
             pass
 
     @property
@@ -373,6 +374,7 @@ class BaseRunner(ABC):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             env=env,
+            errors="replace",
         )
 
         if self.log_manager and result.stdout:
@@ -420,6 +422,7 @@ class BaseRunner(ABC):
                 bufsize=1,
                 universal_newlines=True,
                 env=env,
+                errors="replace",
             )
 
             reader_thread = threading.Thread(
