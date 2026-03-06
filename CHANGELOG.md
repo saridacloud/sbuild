@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Rich Live panel leaving residual border/content lines after transient cleanup by switching to synchronous rendering (`auto_refresh=False` + explicit `refresh=True`)
+- VSCode tasks: venv-installed tools (conan, cmake, etc.) now found on all platforms — global `windows`/`linux`/`osx` blocks prepend `.venv` to PATH, simplifying all task commands to bare `sbuild` (removed per-task platform overrides)
 
 ### Added
 
