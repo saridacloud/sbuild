@@ -591,16 +591,30 @@ def get_tool_version(
     env: dict[str, str] | None = None,
 ) -> str | None:
     """Run a tool with version args and return the parsed version string, or None on failure."""
+    args = version_args or ["--version"]
     try:
         result = subprocess.run(
-            [tool] + (version_args or ["--version"]),
+            [tool] + args,
             capture_output=True,
             text=True,
             timeout=5,
             env=env,
         )
         return _parse_version(result.stdout + result.stderr)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError:
+        if env:
+            # Tool not on default PATH — retry with shell=True so the env's PATH is used
+            # (needed on Windows for tools only available via vcvarsall).
+            try:
+                cmd = " ".join([tool] + args)
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, timeout=5, env=env,
+                )
+                return _parse_version(result.stdout + result.stderr)
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                return None
+        return None
+    except subprocess.TimeoutExpired:
         return None
 
 
