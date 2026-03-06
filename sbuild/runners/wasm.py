@@ -6,11 +6,13 @@ Build runner for WebAssembly (emscripten + cmake) builds.
 
 import os
 import shutil
+import sys
 from pathlib import Path
 from typing import Optional
 
 from ..config import BuildConfig, WasmConfig
 from ..console import console
+from ..doctor import get_tool_version
 from ..exceptions import EnvironmentSetupError
 from ..logging import LogManager
 from ..platform import IS_WINDOWS, create_platform_env
@@ -73,6 +75,20 @@ class WasmRunner(BaseRunner):
         cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building WASM {self.config.build_type}")
 
+    def _get_tool_versions(self) -> list[tuple[str, str]]:
+        """Detect versions of build tools using the activated environment."""
+        if hasattr(self, "_tool_versions_cache"):
+            return self._tool_versions_cache
+        env = self._get_command_env()
+        tools: list[tuple[str, str]] = []
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        tools.append(("Python", py_ver))
+        for name, args in [("cmake", None), ("conan", None), ("git", None), ("emcc", None)]:
+            ver = get_tool_version(name, args, env=env)
+            tools.append((name, ver or "not found"))
+        self._tool_versions_cache = tools
+        return tools
+
     def get_config_summary(self) -> dict[str, list[tuple[str, str]]]:
         """Return WASM build configuration as grouped key-value pairs."""
         sections: dict[str, list[tuple[str, str]]] = {}
@@ -96,6 +112,9 @@ class WasmRunner(BaseRunner):
             auto_defines.append(("-DOPENSSL_ROOT_DIR", str(self._wasm_config.openssl_root_dir)))
         if auto_defines:
             sections["Auto-injected cmake defines"] = auto_defines
+
+        # Tool Versions section
+        sections["Tool Versions"] = self._get_tool_versions()
 
         return sections
 

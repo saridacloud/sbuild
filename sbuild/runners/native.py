@@ -5,12 +5,14 @@ Build runner for native (conan + cmake) builds with vcvarsall.bat support on Win
 """
 
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Optional
 
 from ..config import BuildConfig, NativeConfig
 from ..console import console
+from ..doctor import get_tool_version
 from ..exceptions import ConfigError
 from ..logging import LogManager
 from ..platform import IS_WINDOWS, create_platform_env
@@ -101,6 +103,20 @@ class NativeRunner(BaseRunner):
         cmd = f"cmake --build --preset {self.config.build_preset_name} -j{self.config.jobs}"
         return self.run_command(cmd, f"Building {self.config.build_type}")
 
+    def _get_tool_versions(self) -> list[tuple[str, str]]:
+        """Detect versions of build tools using the activated environment."""
+        if hasattr(self, "_tool_versions_cache"):
+            return self._tool_versions_cache
+        env = self._get_command_env()
+        tools: list[tuple[str, str]] = []
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        tools.append(("Python", py_ver))
+        for name, args in [("cmake", None), ("conan", None), ("git", None), ("ninja", None)]:
+            ver = get_tool_version(name, args, env=env)
+            tools.append((name, ver or "not found"))
+        self._tool_versions_cache = tools
+        return tools
+
     def get_config_summary(self) -> dict[str, list[tuple[str, str]]]:
         """Return native build configuration as grouped key-value pairs."""
         sections: dict[str, list[tuple[str, str]]] = {}
@@ -139,6 +155,9 @@ class NativeRunner(BaseRunner):
             for key, value in self._native_config.env_vars.items():
                 env_items.append((key, value))
             sections["Environment (.env)"] = env_items
+
+        # Tool Versions section
+        sections["Tool Versions"] = self._get_tool_versions()
 
         return sections
 

@@ -583,6 +583,27 @@ def _parse_version(output: str) -> str | None:
     match = re.search(r"(\d+\.\d+(?:\.\d+)?)", output)
     return match.group(1) if match else None
 
+
+def get_tool_version(
+    tool: str,
+    version_args: list[str] | None = None,
+    *,
+    env: dict[str, str] | None = None,
+) -> str | None:
+    """Run a tool with version args and return the parsed version string, or None on failure."""
+    try:
+        result = subprocess.run(
+            [tool] + (version_args or ["--version"]),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env=env,
+        )
+        return _parse_version(result.stdout + result.stderr)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
 def _check_tool_version(
     tool: str,
     version_args: list[str],

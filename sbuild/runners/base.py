@@ -56,6 +56,10 @@ class BaseRunner(ABC):
         """
         return {}
 
+    def _get_tool_versions(self) -> list[tuple[str, str]]:
+        """Return detected tool versions as (label, version) pairs. Subclasses override."""
+        return []
+
     @abstractmethod
     def configure(self) -> bool:
         """Configure the build (cmake configure step)"""

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Tool Versions** section in config dump — `sbuild config`, verbose mode, and build logs now show detected versions of Python, CMake, Conan, Git, and Ninja (native) or emcc (WASM)
+- `get_tool_version()` public helper in `doctor.py` — lightweight version detection for a single tool
+
 ### Changed
 
 - **BREAKING:** `resolve_profile_path()` moved from module-level function to `NativeConfig._resolve_profile_path()` static method (no longer a public API)

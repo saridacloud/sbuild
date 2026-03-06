@@ -181,6 +181,28 @@ class TestRunnerConfigSummary:
         assert "Target architecture" in labels
         assert "Friendly arch" in labels
 
+    def test_native_runner_has_tool_versions_section(self, project_root):
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
+            summary = session.runner.get_config_summary()
+
+        assert "Tool Versions" in summary
+        labels = [label for label, _ in summary["Tool Versions"]]
+        assert "Python" in labels
+        assert "cmake" in labels
+        assert "conan" in labels
+        assert "git" in labels
+        assert "ninja" in labels
+
+    def test_tool_versions_in_log(self, project_root):
+        config = _make_config(project_root)
+        with BuildSession(config) as session:
+            _ = session.runner
+            log_path = session.log_path
+
+        content = log_path.read_text(encoding="utf-8")
+        assert "Tool Versions" in content
+
     def test_base_runner_returns_empty(self):
         from sbuild.runners.base import BaseRunner
 
@@ -192,3 +214,22 @@ class TestRunnerConfigSummary:
         config = MagicMock()
         runner = StubRunner(config)
         assert runner.get_config_summary() == {}
+        assert runner._get_tool_versions() == []
+
+
+class TestGetToolVersion:
+    """Test the get_tool_version() helper from doctor.py."""
+
+    def test_returns_none_for_missing_tool(self):
+        from sbuild.doctor import get_tool_version
+
+        result = get_tool_version("nonexistent_tool_xyz_123")
+        assert result is None
+
+    def test_returns_version_for_python(self):
+        import sys
+        from sbuild.doctor import get_tool_version
+
+        result = get_tool_version(sys.executable, ["--version"])
+        assert result is not None
+        assert result.startswith(f"{sys.version_info.major}.{sys.version_info.minor}")
