@@ -14,6 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
+from rich.markup import escape
 from rich.table import Table
 
 from .config import (
@@ -124,7 +125,7 @@ class DoctorReport:
             if hints:
                 console.print("  [bold]Recommendations:[/bold]")
                 for h in hints:
-                    console.print(f"    - {h}")
+                    console.print(f"    - {escape(h)}")
             console.print()
 
         # Summary

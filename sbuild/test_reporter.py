@@ -7,6 +7,7 @@ Provides TestReporter for formatting and displaying CTest results.
 import re
 from typing import Optional
 
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -138,11 +139,11 @@ class TestReporter:
         if len(failed_names) <= 10:
             console.print("\n[red]Failed tests:[/red]")
             for name in failed_names:
-                console.print(f"  [red]x[/red] {name}")
+                console.print(f"  [red]x[/red] {escape(name)}")
         else:
             console.print(f"\n[red]Failed tests ({len(failed_names)} total):[/red]")
             for name in failed_names[:10]:
-                console.print(f"  [red]x[/red] {name}")
+                console.print(f"  [red]x[/red] {escape(name)}")
             console.print(f"  [dim]... and {len(failed_names) - 10} more[/dim]")
 
     def show_failures(self, all_output: list[str]) -> None:
@@ -172,7 +173,7 @@ class TestReporter:
             )
             console.print(
                 Panel(
-                    "\n".join(display_lines),
+                    "\n".join(escape(line) for line in display_lines),
                     title="[red]Failure Details[/red]",
                     border_style="red",
                     expand=False,

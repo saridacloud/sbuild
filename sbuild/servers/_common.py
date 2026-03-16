@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from rich.markup import escape
+
 from ..console import console
 
 # Flag to signal shutdown
@@ -68,8 +70,8 @@ def serve_common(
     try:
         with contextlib.chdir(build_dir):
             scheme = "https" if ssl_context else "http"
-            console.print(f"[cyan]Serving WASM build from:[/cyan] {build_dir}")
-            console.print(f"[green]{scheme.upper()} server running on:[/green] {scheme}://{bind}:{port}/")
+            console.print(f"[cyan]Serving WASM build from:[/cyan] {escape(str(build_dir))}")
+            console.print(f"[green]{scheme.upper()} server running on:[/green] {escape(f'{scheme}://{bind}:{port}/')}")
             console.print("[dim]COOP/COEP headers enabled for SharedArrayBuffer[/dim]")
 
             for msg in extra_messages or []:
@@ -93,4 +95,4 @@ def serve_common(
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped.[/yellow]")
     except Exception as e:
-        console.print(f"[red]Server error: {e}[/red]")
+        console.print(f"[red]Server error: {escape(str(e))}[/red]")

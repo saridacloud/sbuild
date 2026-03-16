@@ -61,6 +61,27 @@ class TestBuildSessionExit:
                 raise SystemExit(1)
 
 
+class TestBuildSessionMarkupSafety:
+    """Ensure exceptions with square brackets don't cause Rich MarkupError."""
+
+    def test_build_error_with_brackets(self, project_root):
+        config = _make_config(project_root)
+        # Should not raise MarkupError
+        with BuildSession(config):
+            raise BuildError("search paths: [/usr/lib/gcc/x86_64-redhat-linux/15 /usr/lib64]")
+
+    def test_unexpected_error_with_brackets(self, project_root):
+        config = _make_config(project_root)
+        # Should not raise MarkupError
+        with BuildSession(config):
+            raise RuntimeError("path list: [/foo/bar /baz]")
+
+    def test_config_error_with_brackets(self, project_root):
+        config = _make_config(project_root)
+        with BuildSession(config):
+            raise ConfigError("missing [required] config")
+
+
 class TestBuildSessionRunner:
     def test_runner_lazy_creation(self, project_root):
         config = _make_config(project_root)

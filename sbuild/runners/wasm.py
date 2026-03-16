@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from rich.markup import escape
+
 from ..config import BuildConfig, WasmConfig
 from ..console import console
 from ..doctor import get_tool_version
@@ -124,7 +126,7 @@ class WasmRunner(BaseRunner):
 
         if not self.config.build_dir.exists():
             console.print(
-                f"[red]Build directory not found: {self.config.build_dir}[/red]"
+                f"[red]Build directory not found: {escape(str(self.config.build_dir))}[/red]"
             )
             console.print("[yellow]Please build the WASM project first.[/yellow]")
             return

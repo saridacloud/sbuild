@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
+from rich.markup import escape
 
 from .config import BuildConfig, ConfigManager
 from .session import BuildSession
@@ -412,7 +413,7 @@ def serve(
             session.runner.serve(https=https, port=port)
 
     except (BuildError, ConfigError) as e:
-        console.print(f"[red]Error: {e}[/red]")
+        console.print(f"[red]Error: {escape(str(e))}[/red]")
         raise typer.Exit(1)
 
 
@@ -466,7 +467,7 @@ def show_config(
             _ = session.runner
             session._show_config_console()
     except (BuildError, ConfigError) as e:
-        console.print(f"[red]Error: {e}[/red]")
+        console.print(f"[red]Error: {escape(str(e))}[/red]")
         raise typer.Exit(1)
 
 

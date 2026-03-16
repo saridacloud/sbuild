@@ -9,6 +9,7 @@ import sys
 import time
 from typing import Optional, TYPE_CHECKING
 
+from rich.markup import escape
 from rich.panel import Panel
 
 from . import __version__
@@ -81,7 +82,7 @@ class BuildSession:
                 # SystemExit from exit_with_error() - don't suppress, let it propagate
                 suppress_exception = False
             elif isinstance(exc_val, (BuildError, ConfigError)):
-                self.console.print(f"\n[red]Error: {exc_val}[/red]")
+                self.console.print(f"\n[red]Error: {escape(str(exc_val))}[/red]")
                 if self.log_manager:
                     self.log_manager.write(f"Fatal error: {exc_val}")
                 suppress_exception = True
@@ -91,7 +92,7 @@ class BuildSession:
                     self.log_manager.write("Build interrupted by user")
                 suppress_exception = True
             else:
-                self.console.print(f"\n[red]Unexpected error: {exc_val}[/red]")
+                self.console.print(f"\n[red]Unexpected error: {escape(str(exc_val))}[/red]")
                 if self.log_manager:
                     self.log_manager.write(f"Fatal error: {exc_val}")
                 suppress_exception = True
@@ -165,12 +166,12 @@ class BuildSession:
 
         # General info
         base_console.print(f"[green]sbuild version:[/green] [dim]{__version__}[/dim]")
-        base_console.print(f"[green]Command:[/green] [dim]{self.command}[/dim]")
+        base_console.print(f"[green]Command:[/green] [dim]{escape(self.command)}[/dim]")
         base_console.print(
-            f"[green]Project:[/green] [dim]{self.config.project_name} {self.config.version}[/dim]"
+            f"[green]Project:[/green] [dim]{escape(self.config.project_name)} {escape(self.config.version)}[/dim]"
         )
-        base_console.print(f"[green]Project root:[/green] [dim]{self.config.project_root}[/dim]")
-        base_console.print(f"[green]Build directory:[/green] [dim]{self.config.build_dir}[/dim]")
+        base_console.print(f"[green]Project root:[/green] [dim]{escape(str(self.config.project_root))}[/dim]")
+        base_console.print(f"[green]Build directory:[/green] [dim]{escape(str(self.config.build_dir))}[/dim]")
         base_console.print(
             f"[green]Configure preset:[/green] [dim]{self.config.preset_name}[/dim]"
         )
@@ -178,7 +179,7 @@ class BuildSession:
             f"[green]Build preset:[/green] [dim]{self.config.build_preset_name}[/dim]"
         )
         if self.config.cmake_args:
-            base_console.print(f"[green]CMake args:[/green] [dim]{self.config.cmake_args}[/dim]")
+            base_console.print(f"[green]CMake args:[/green] [dim]{escape(self.config.cmake_args)}[/dim]")
         if self.config.build_number is not None:
             base_console.print(f"[green]Build number:[/green] [dim]{self.config.build_number}[/dim]")
 
@@ -193,7 +194,7 @@ class BuildSession:
         for section_name, items in self._runner.get_config_summary().items():
             base_console.print(f"[bold]{section_name}:[/bold]")
             for label, value in items:
-                base_console.print(f"  [green]{label}:[/green] [dim]{value}[/dim]")
+                base_console.print(f"  [green]{escape(label)}:[/green] [dim]{escape(value)}[/dim]")
 
     def show_header(self) -> None:
         """Display build header with command and configuration."""
@@ -219,11 +220,11 @@ class BuildSession:
 
         self.console.print(
             Panel(
-                f"{self.config.project_name} - {self.command.capitalize()} ({mode}{platform_str}{arch_str})",
+                f"{escape(self.config.project_name)} - {self.command.capitalize()} ({mode}{platform_str}{arch_str})",
                 expand=False,
             )
         )
-        self.console.print(f"[dim]Log file: {self.log_path}[/dim]")
+        self.console.print(f"[dim]Log file: {escape(str(self.log_path))}[/dim]")
 
         if self.config.verbose:
             self._show_config_console()
@@ -237,14 +238,14 @@ class BuildSession:
 
         if action in ["build", "rebuild"]:
             self.console.print(
-                f"\n[green]Build complete![/green] Output: [blue]{self.config.build_dir}[/blue]"
+                f"\n[green]Build complete![/green] Output: [blue]{escape(str(self.config.build_dir))}[/blue]"
             )
         else:
             self.console.print(f"\n[green]{action.capitalize()} complete![/green]")
         if self._session_start is not None:
             total = time.perf_counter() - self._session_start
             self.console.print(f"[dim]Total time: {total:.2f}s[/dim]")
-        self.console.print(f"[dim]Log saved to: {self.log_path}[/dim]")
+        self.console.print(f"[dim]Log saved to: {escape(str(self.log_path))}[/dim]")
 
     def show_failure(self, action: str) -> None:
         """Display failure message."""
@@ -255,7 +256,7 @@ class BuildSession:
         if self._session_start is not None:
             total = time.perf_counter() - self._session_start
             self.console.print(f"[dim]Total time: {total:.2f}s[/dim]")
-        self.console.print(f"[yellow]Check log for details: {self.log_path}[/yellow]")
+        self.console.print(f"[yellow]Check log for details: {escape(str(self.log_path))}[/yellow]")
 
     def exit_with_error(self, code: int = 1) -> None:
         """Exit the process with an error code."""

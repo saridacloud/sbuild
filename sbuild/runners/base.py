@@ -17,6 +17,7 @@ from typing import ClassVar, Optional
 
 from rich.console import Console
 from rich.live import Live
+from rich.markup import escape
 from rich.panel import Panel
 
 from ..config import BuildConfig, resolve_build_number
@@ -77,7 +78,7 @@ class BaseRunner(ABC):
     def _require_build_dir(self) -> bool:
         """Check that the build directory exists. Prints error and returns False if missing."""
         if not self.config.build_dir.exists():
-            console.print(f"[red]Build directory not found: {self.config.build_dir}[/red]")
+            console.print(f"[red]Build directory not found: {escape(str(self.config.build_dir))}[/red]")
             console.print("[yellow]Please build the project first.[/yellow]")
             return False
         return True
@@ -92,7 +93,7 @@ class BaseRunner(ABC):
                 )
                 return True
             except Exception as e:
-                console.print(f"[red][FAIL][/red] Failed to clean: {e}")
+                console.print(f"[red][FAIL][/red] Failed to clean: {escape(str(e))}")
                 return False
         return True
 
@@ -109,7 +110,7 @@ class BaseRunner(ABC):
         # If no prefix specified and not a system install, use default
         if not prefix and not system_install:
             prefix = self.config.project_root / "install" / self.config.build_type
-            console.print(f"[yellow]No prefix specified. Using default: {prefix}[/yellow]")
+            console.print(f"[yellow]No prefix specified. Using default: {escape(str(prefix))}[/yellow]")
 
         cmd = f"cmake --install {self.config.build_dir}"
 
@@ -237,7 +238,7 @@ class BaseRunner(ABC):
                     time.sleep(0.1)
                 reader_thread.join(timeout=1.0)
                 for line in all_output:
-                    console.print(line, highlight=False)
+                    console.print(line, highlight=False, markup=False)
             else:
                 self._show_live_panel(process, last_lines, "Running Tests")
 
@@ -271,7 +272,7 @@ class BaseRunner(ABC):
                 process.terminate()
             raise
         except Exception as e:
-            console.print(f"[red]Error running tests: {e}[/red]")
+            console.print(f"[red]Error running tests: {escape(str(e))}[/red]")
             return False
 
     def _prepare_command(self, cmd: str) -> str:
@@ -310,7 +311,7 @@ class BaseRunner(ABC):
         ) as live:
             while process.poll() is None:
                 lines_to_show = (
-                    list(last_lines) if last_lines else ["[dim]Starting...[/dim]"]
+                    [escape(l) for l in last_lines] if last_lines else ["[dim]Starting...[/dim]"]
                 )
 
                 # Pad to consistent height
@@ -364,7 +365,7 @@ class BaseRunner(ABC):
         start_time: float,
     ) -> bool:
         """Run command in verbose mode with full output"""
-        console.print(f"[dim]$ {cmd}[/dim]")
+        console.print(f"[dim]$ {escape(cmd)}[/dim]")
 
         result = subprocess.run(
             cmd,
@@ -382,7 +383,7 @@ class BaseRunner(ABC):
                 self.log_manager.write(f"  {line}")
 
         if result.stdout:
-            console.print(result.stdout, end="", highlight=False)
+            console.print(result.stdout, end="", highlight=False, markup=False)
 
         elapsed = time.time() - start_time
 
@@ -453,7 +454,7 @@ class BaseRunner(ABC):
                 process.terminate()
             raise
         except Exception as e:
-            console.print(f"[red]Error running command: {e}[/red]")
+            console.print(f"[red]Error running command: {escape(str(e))}[/red]")
             return False
 
     def _show_error_output(self, all_output: list[str]) -> None:
@@ -492,7 +493,7 @@ class BaseRunner(ABC):
 
         console.print(
             Panel(
-                "\n".join(unique_lines[-self._ERROR_DISPLAY_CAP:]),
+                "\n".join(escape(line) for line in unique_lines[-self._ERROR_DISPLAY_CAP:]),
                 title="[red]Build Errors[/red]",
                 border_style="red",
                 expand=False,
