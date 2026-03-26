@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-03-26
+
+### Fixed
+
+- Race condition: snapshot deque before iterating in `_show_live_panel` to prevent `RuntimeError: deque mutated during iteration` during high-parallelism builds
+- Orphaned subprocesses: terminate child process in generic exception handlers in `_run_with_panel` and `run_tests` (previously only `KeyboardInterrupt` cleaned up)
+
 ## [1.3.0] - 2026-03-26
 
 ### Added
