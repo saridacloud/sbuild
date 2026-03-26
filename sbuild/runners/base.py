@@ -272,6 +272,8 @@ class BaseRunner(ABC):
                 process.terminate()
             raise
         except Exception as e:
+            if process:
+                process.terminate()
             console.print(f"[red]Error running tests: {escape(str(e))}[/red]")
             return False
 
@@ -310,8 +312,9 @@ class BaseRunner(ABC):
             auto_refresh=False,
         ) as live:
             while process.poll() is None:
+                snapshot = list(last_lines)
                 lines_to_show = (
-                    [escape(l) for l in last_lines] if last_lines else ["[dim]Starting...[/dim]"]
+                    [escape(l) for l in snapshot] if snapshot else ["[dim]Starting...[/dim]"]
                 )
 
                 # Pad to consistent height
@@ -454,6 +457,8 @@ class BaseRunner(ABC):
                 process.terminate()
             raise
         except Exception as e:
+            if process:
+                process.terminate()
             console.print(f"[red]Error running command: {escape(str(e))}[/red]")
             return False
 
