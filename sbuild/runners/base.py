@@ -15,11 +15,14 @@ from collections import deque
 from pathlib import Path
 from typing import ClassVar, Optional
 
+from rich.console import Console
 from rich.live import Live
+from rich.markup import escape
 from rich.panel import Panel
 
-from ..config import BuildConfig
+from ..config import BuildConfig, resolve_build_number
 from ..console import console
+from ..exceptions import BuildError
 from ..logging import LogManager
 from ..test_reporter import TestReporter
 
@@ -30,9 +33,33 @@ class BaseRunner(ABC):
     supports_tests: ClassVar[bool] = True
     supports_serve: ClassVar[bool] = False
 
+    _PANEL_MAX_LINES: ClassVar[int] = 8
+    _PANEL_HEIGHT: ClassVar[int] = 10
+    _ERROR_TAIL_LINES: ClassVar[int] = 30
+    _ERROR_SEARCH_LINES: ClassVar[int] = 100
+    _ERROR_CONTEXT_LIMIT: ClassVar[int] = 20
+    _ERROR_DISPLAY_CAP: ClassVar[int] = 25
+
+    _ERROR_KEYWORDS: ClassVar[list[str]] = [
+        "error:", "failed:", "fatal:", "undefined reference",
+        "cannot find", "no such file", "permission denied", "command not found",
+    ]
+
     def __init__(self, config: BuildConfig, log_manager: Optional[LogManager] = None):
         self.config = config
         self.log_manager = log_manager
+
+    def get_config_summary(self) -> dict[str, list[tuple[str, str]]]:
+        """Return runner-specific configuration as grouped key-value pairs.
+
+        Returns a dict mapping section names to ordered lists of (label, value) tuples.
+        Subclasses override to add platform-specific info.
+        """
+        return {}
+
+    def _get_tool_versions(self) -> list[tuple[str, str]]:
+        """Return detected tool versions as (label, version) pairs. Subclasses override."""
+        return []
 
     @abstractmethod
     def configure(self) -> bool:
@@ -46,8 +73,15 @@ class BaseRunner(ABC):
 
     def serve(self, **kwargs) -> None:
         """Start development server. Override in subclasses that support it."""
-        from ..exceptions import BuildError
         raise BuildError(f"{type(self).__name__} does not support 'serve'")
+
+    def _require_build_dir(self) -> bool:
+        """Check that the build directory exists. Prints error and returns False if missing."""
+        if not self.config.build_dir.exists():
+            console.print(f"[red]Build directory not found: {escape(str(self.config.build_dir))}[/red]")
+            console.print("[yellow]Please build the project first.[/yellow]")
+            return False
+        return True
 
     def clean(self) -> bool:
         """Clean build directory"""
@@ -59,7 +93,7 @@ class BaseRunner(ABC):
                 )
                 return True
             except Exception as e:
-                console.print(f"[red][FAIL][/red] Failed to clean: {e}")
+                console.print(f"[red][FAIL][/red] Failed to clean: {escape(str(e))}")
                 return False
         return True
 
@@ -70,14 +104,13 @@ class BaseRunner(ABC):
         system_install: bool = False,
     ) -> bool:
         """Install the project"""
-        if not self.config.build_dir.exists():
-            console.print("[red]Build directory not found. Please build first.[/red]")
+        if not self._require_build_dir():
             return False
 
         # If no prefix specified and not a system install, use default
         if not prefix and not system_install:
             prefix = self.config.project_root / "install" / self.config.build_type
-            console.print(f"[yellow]No prefix specified. Using default: {prefix}[/yellow]")
+            console.print(f"[yellow]No prefix specified. Using default: {escape(str(prefix))}[/yellow]")
 
         cmd = f"cmake --install {self.config.build_dir}"
 
@@ -111,20 +144,16 @@ class BaseRunner(ABC):
 
     def package(self, generator: Optional[str] = None) -> bool:
         """Create installation package"""
-        import os
+        import contextlib
 
-        if not self.config.build_dir.exists():
-            console.print("[red]Build directory not found. Please build first.[/red]")
+        if not self._require_build_dir():
             return False
 
         if generator and generator.upper() == "NSIS" and platform.system() != "Windows":
             console.print("[yellow]Warning: NSIS generator is only available on Windows[/yellow]")
             return False
 
-        original_dir = os.getcwd()
-        try:
-            os.chdir(self.config.build_dir)
-
+        with contextlib.chdir(self.config.build_dir):
             cmd = f"cpack -C {self.config.build_type}"
             if generator:
                 cmd += f" -G {generator}"
@@ -132,10 +161,10 @@ class BaseRunner(ABC):
                 # Use generator-specific file names since CPACK_IFW_PACKAGE_FILE_NAME
                 # is not reliably respected by CPack at runtime
                 if generator.upper() == "IFW":
-                    build_num = self.config.get_resolved_build_number()
+                    build_num = resolve_build_number(self.config.build_number, self.config.build_dir, self.config.project_root)
                     cmd += f" -D CPACK_PACKAGE_FILE_NAME={self.config.project_name}-{self.config.version}-build{build_num}-{suffix}-ifw"
                 elif generator.upper() == "NSIS":
-                    build_num = self.config.get_resolved_build_number()
+                    build_num = resolve_build_number(self.config.build_number, self.config.build_dir, self.config.project_root)
                     cmd += f" -D CPACK_PACKAGE_FILE_NAME={self.config.project_name}-{self.config.version}-build{build_num}-{suffix}-setup"
 
             desc = "Creating package"
@@ -143,8 +172,6 @@ class BaseRunner(ABC):
                 desc += f" ({generator})"
 
             return self.run_command(cmd, desc, cwd=self.config.build_dir)
-        finally:
-            os.chdir(original_dir)
 
     def run_tests(
         self,
@@ -154,9 +181,7 @@ class BaseRunner(ABC):
         output_on_failure: bool = True,
     ) -> bool:
         """Run tests via CTest with detailed summary."""
-        if not self.config.build_dir.exists():
-            console.print(f"[red]Build directory not found: {self.config.build_dir}[/red]")
-            console.print("[yellow]Please build the project first.[/yellow]")
+        if not self._require_build_dir():
             return False
 
         cmd = f"ctest --test-dir {self.config.build_dir}"
@@ -184,7 +209,7 @@ class BaseRunner(ABC):
 
         start_time = time.time()
         all_output: list[str] = []
-        last_lines: deque = deque(maxlen=8)
+        last_lines: deque = deque(maxlen=self._PANEL_MAX_LINES)
         process = None
 
         try:
@@ -198,6 +223,7 @@ class BaseRunner(ABC):
                 bufsize=1,
                 universal_newlines=True,
                 env=env,
+                errors="replace",
             )
 
             reader_thread = threading.Thread(
@@ -212,7 +238,7 @@ class BaseRunner(ABC):
                     time.sleep(0.1)
                 reader_thread.join(timeout=1.0)
                 for line in all_output:
-                    console.print(line, highlight=False)
+                    console.print(line, highlight=False, markup=False)
             else:
                 self._show_live_panel(process, last_lines, "Running Tests")
 
@@ -246,7 +272,7 @@ class BaseRunner(ABC):
                 process.terminate()
             raise
         except Exception as e:
-            console.print(f"[red]Error running tests: {e}[/red]")
+            console.print(f"[red]Error running tests: {escape(str(e))}[/red]")
             return False
 
     def _prepare_command(self, cmd: str) -> str:
@@ -257,7 +283,7 @@ class BaseRunner(ABC):
         """Get environment variables for command execution. Override in subclasses."""
         return None
 
-    def _read_process_output(self, proc, lines_queue, all_lines):
+    def _read_process_output(self, proc: subprocess.Popen, lines_queue: deque, all_lines: list[str]) -> None:
         """Read subprocess output in background thread"""
         try:
             for line in iter(proc.stdout.readline, ""):
@@ -267,26 +293,29 @@ class BaseRunner(ABC):
                     all_lines.append(stripped_line)
                     if self.log_manager:
                         self.log_manager.write(f"  {stripped_line}")
-        except Exception:
+        except (IOError, OSError, ValueError):
             pass
 
     @property
-    def _live_console(self):
+    def _live_console(self) -> Console:
         """Get the underlying Rich Console for Live context"""
-        return console.console if hasattr(console, "console") else console
+        return console
 
     def _show_live_panel(self, process, last_lines, title):
         """Show a Rich Live panel tracking process output until it exits"""
         with Live(
-            console=self._live_console, refresh_per_second=4, transient=True
+            console=self._live_console,
+            refresh_per_second=4,
+            transient=True,
+            auto_refresh=False,
         ) as live:
             while process.poll() is None:
                 lines_to_show = (
-                    list(last_lines) if last_lines else ["[dim]Starting...[/dim]"]
+                    [escape(l) for l in last_lines] if last_lines else ["[dim]Starting...[/dim]"]
                 )
 
-                # Pad to 8 lines for consistent height
-                while len(lines_to_show) < 8:
+                # Pad to consistent height
+                while len(lines_to_show) < self._PANEL_MAX_LINES:
                     lines_to_show.append("")
 
                 content = "\n".join(lines_to_show)
@@ -296,10 +325,10 @@ class BaseRunner(ABC):
                     title=f"[cyan]{title}[/cyan]",
                     border_style="cyan",
                     expand=True,
-                    height=10,
+                    height=self._PANEL_HEIGHT,
                 )
 
-                live.update(panel)
+                live.update(panel, refresh=True)
                 time.sleep(0.1)
 
     def run_command(
@@ -336,7 +365,7 @@ class BaseRunner(ABC):
         start_time: float,
     ) -> bool:
         """Run command in verbose mode with full output"""
-        console.print(f"[dim]$ {cmd}[/dim]")
+        console.print(f"[dim]$ {escape(cmd)}[/dim]")
 
         result = subprocess.run(
             cmd,
@@ -346,6 +375,7 @@ class BaseRunner(ABC):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             env=env,
+            errors="replace",
         )
 
         if self.log_manager and result.stdout:
@@ -353,7 +383,7 @@ class BaseRunner(ABC):
                 self.log_manager.write(f"  {line}")
 
         if result.stdout:
-            console.print(result.stdout, end="", highlight=False)
+            console.print(result.stdout, end="", highlight=False, markup=False)
 
         elapsed = time.time() - start_time
 
@@ -377,7 +407,7 @@ class BaseRunner(ABC):
         start_time: float,
     ) -> bool:
         """Run command with Rich Live panel showing last N lines"""
-        last_lines = deque(maxlen=8)
+        last_lines = deque(maxlen=self._PANEL_MAX_LINES)
         all_output = []
         return_code = None
         process = None
@@ -393,6 +423,7 @@ class BaseRunner(ABC):
                 bufsize=1,
                 universal_newlines=True,
                 env=env,
+                errors="replace",
             )
 
             reader_thread = threading.Thread(
@@ -423,7 +454,7 @@ class BaseRunner(ABC):
                 process.terminate()
             raise
         except Exception as e:
-            console.print(f"[red]Error running command: {e}[/red]")
+            console.print(f"[red]Error running command: {escape(str(e))}[/red]")
             return False
 
     def _show_error_output(self, all_output: list[str]) -> None:
@@ -432,37 +463,21 @@ class BaseRunner(ABC):
             console.print("[red]No output captured[/red]")
             return
 
-        # Find the last 30 lines or all lines if fewer
-        error_lines = all_output[-30:] if len(all_output) > 30 else all_output
+        # Find the last N lines or all lines if fewer
+        error_lines = all_output[-self._ERROR_TAIL_LINES:] if len(all_output) > self._ERROR_TAIL_LINES else all_output
 
-        # Search last 100 lines for error indicators
-        search_lines = all_output[-100:] if len(all_output) > 100 else all_output
-        error_keywords = [
-            "error:",
-            "Error:",
-            "ERROR:",
-            "failed:",
-            "Failed:",
-            "FAILED:",
-            "fatal:",
-            "Fatal:",
-            "FATAL:",
-            "undefined reference",
-            "cannot find",
-            "No such file",
-            "Permission denied",
-            "command not found",
-        ]
+        # Search last N lines for error indicators (case-insensitive)
+        search_lines = all_output[-self._ERROR_SEARCH_LINES:] if len(all_output) > self._ERROR_SEARCH_LINES else all_output
 
         # Find lines with error indicators
         error_context = []
         for i, line in enumerate(search_lines):
-            if any(keyword in line for keyword in error_keywords):
+            if any(kw in line.lower() for kw in self._ERROR_KEYWORDS):
                 start_idx = max(0, i - 2)
                 end_idx = min(len(search_lines), i + 3)
                 context_lines = search_lines[start_idx:end_idx]
                 error_context.extend(context_lines)
-                if len(error_context) > 20:
+                if len(error_context) > self._ERROR_CONTEXT_LIMIT:
                     break
 
         # Show error context if found, otherwise show last lines
@@ -478,15 +493,15 @@ class BaseRunner(ABC):
 
         console.print(
             Panel(
-                "\n".join(unique_lines[-25:]),
+                "\n".join(escape(line) for line in unique_lines[-self._ERROR_DISPLAY_CAP:]),
                 title="[red]Build Errors[/red]",
                 border_style="red",
                 expand=False,
             )
         )
 
-        if len(all_output) > 30:
+        if len(all_output) > self._ERROR_TAIL_LINES:
             console.print(
-                f"[dim]Showing last {min(len(unique_lines), 25)} relevant lines. "
+                f"[dim]Showing last {min(len(unique_lines), self._ERROR_DISPLAY_CAP)} relevant lines. "
                 "Use -v/--verbose to see full output[/dim]"
             )

@@ -4,13 +4,15 @@ sbuild - Shared server utilities
 Common handler, signal setup, and serve loop for HTTP/HTTPS servers.
 """
 
+import contextlib
 import http.server
-import os
 import signal
 import ssl
 import sys
 from pathlib import Path
 from typing import Optional
+
+from rich.markup import escape
 
 from ..console import console
 
@@ -55,8 +57,6 @@ def serve_common(
     global _shutdown_requested
     _shutdown_requested = False
 
-    original_dir = os.getcwd()
-
     def signal_handler(signum, frame):
         global _shutdown_requested
         _shutdown_requested = True
@@ -68,34 +68,31 @@ def serve_common(
         signal.signal(signal.SIGTERM, signal_handler)
 
     try:
-        os.chdir(build_dir)
+        with contextlib.chdir(build_dir):
+            scheme = "https" if ssl_context else "http"
+            console.print(f"[cyan]Serving WASM build from:[/cyan] {escape(str(build_dir))}")
+            console.print(f"[green]{scheme.upper()} server running on:[/green] {escape(f'{scheme}://{bind}:{port}/')}")
+            console.print("[dim]COOP/COEP headers enabled for SharedArrayBuffer[/dim]")
 
-        scheme = "https" if ssl_context else "http"
-        console.print(f"[cyan]Serving WASM build from:[/cyan] {build_dir}")
-        console.print(f"[green]{scheme.upper()} server running on:[/green] {scheme}://{bind}:{port}/")
-        console.print("[dim]COOP/COEP headers enabled for SharedArrayBuffer[/dim]")
+            for msg in extra_messages or []:
+                console.print(msg)
 
-        for msg in extra_messages or []:
-            console.print(msg)
+            console.print("[dim]Press Ctrl+C to stop[/dim]\n")
 
-        console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+            server_address = (bind, port)
+            httpd = http.server.HTTPServer(server_address, COOPCOEPHandler)
+            httpd.timeout = 0.5  # Short timeout to check for shutdown
 
-        server_address = (bind, port)
-        httpd = http.server.HTTPServer(server_address, COOPCOEPHandler)
-        httpd.timeout = 0.5  # Short timeout to check for shutdown
+            if ssl_context:
+                httpd.socket = ssl_context.wrap_socket(httpd.socket, server_side=True)
 
-        if ssl_context:
-            httpd.socket = ssl_context.wrap_socket(httpd.socket, server_side=True)
+            # Use polling loop instead of serve_forever for better Ctrl+C handling
+            while not _shutdown_requested:
+                httpd.handle_request()
 
-        # Use polling loop instead of serve_forever for better Ctrl+C handling
-        while not _shutdown_requested:
-            httpd.handle_request()
-
-        console.print("[yellow]Server stopped.[/yellow]")
+            console.print("[yellow]Server stopped.[/yellow]")
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Server stopped.[/yellow]")
     except Exception as e:
-        console.print(f"[red]Server error: {e}[/red]")
-    finally:
-        os.chdir(original_dir)
+        console.print(f"[red]Server error: {escape(str(e))}[/red]")

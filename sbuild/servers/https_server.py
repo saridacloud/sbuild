@@ -11,6 +11,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from rich.markup import escape
+
 from ..console import console
 from ._common import serve_common
 
@@ -20,7 +22,7 @@ def _generate_self_signed_cert(
 ) -> bool:
     """Generate a self-signed certificate using OpenSSL"""
     if cert_file.exists() and key_file.exists():
-        console.print(f"[dim]Using existing certificate: {cert_file}[/dim]")
+        console.print(f"[dim]Using existing certificate: {escape(str(cert_file))}[/dim]")
         return True
 
     console.print("[cyan]Generating self-signed certificate...[/cyan]")
@@ -49,16 +51,16 @@ def _generate_self_signed_cert(
             check=True,
             capture_output=True,
         )
-        console.print(f"[green]Certificate generated:[/green] {cert_file}")
+        console.print(f"[green]Certificate generated:[/green] {escape(str(cert_file))}")
         return True
     except subprocess.CalledProcessError as e:
-        console.print(f"[red]OpenSSL failed: {e.stderr.decode()}[/red]")
+        console.print(f"[red]OpenSSL failed: {escape(e.stderr.decode())}[/red]")
         return False
     except FileNotFoundError:
         console.print("[red]OpenSSL not found.[/red]")
-        console.print("[yellow]Please set OPENSSL in .env.wasm or install OpenSSL[/yellow]")
+        console.print("[yellow]Ensure openssl is on PATH or set SBUILD_WASM_OPENSSL_ROOT_DIR in .env[/yellow]")
         if platform.system() == "Windows":
-            console.print("[dim]Example: OPENSSL=C:\\Program Files\\Git\\usr\\bin\\openssl.exe[/dim]")
+            console.print("[dim]Example: SBUILD_WASM_OPENSSL_ROOT_DIR=C:\\Program Files\\Git\\usr[/dim]")
         else:
             console.print("[dim]OpenSSL is usually available via your package manager (apt, brew, etc.)[/dim]")
         return False

@@ -197,7 +197,8 @@ class TestCheckCmakePresets:
         }
         (tmp_path / "CMakePresets.json").write_text(json.dumps(main_presets))
         (tmp_path / "CMakeUserPresets.json").write_text(json.dumps(user_presets))
-        (tmp_path / ".env.wasm").write_text("")  # enable WASM preset expectation
+        # Write WASM vars to .env to enable WASM preset expectation
+        (tmp_path / ".env").write_text("EMSDK=/some/path\nSBUILD_WASM_QT_PATH=/some/qt\n")
 
         report = _make_report(tmp_path)
         results = report._check_project_config()

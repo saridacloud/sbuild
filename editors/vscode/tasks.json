@@ -8,7 +8,9 @@
     // Usage: Ctrl+Shift+B for default build, Ctrl+Shift+P -> "Tasks: Run Task" for all tasks.
     // Tasks ending with "..." will prompt you for options via Quick Pick dialogs.
     //
-    // Commands use .venv paths. Adjust if your virtual environment is elsewhere.
+    // Global platform blocks ("windows", "linux", "osx") prepend .venv to PATH
+    // so sbuild and venv-installed tools (conan, cmake, etc.) are found automatically.
+    // On Windows, cmd.exe is set as the default shell for interactive tasks.
     //
     // Recommended VS Code settings for faster task execution (add to .vscode/settings.json):
     //   "terminal.integrated.automationProfile.windows": {
@@ -16,6 +18,34 @@
     //       "args": ["/d"]
     //   }
     "version": "2.0.0",
+    "windows": {
+        "options": {
+            "env": {
+                "VIRTUAL_ENV": "${workspaceFolder}\\.venv",
+                "PATH": "${workspaceFolder}\\.venv\\Scripts;${env:PATH}"
+            },
+            "shell": {
+                "executable": "cmd.exe",
+                "args": ["/d", "/c"]
+            }
+        }
+    },
+    "linux": {
+        "options": {
+            "env": {
+                "VIRTUAL_ENV": "${workspaceFolder}/.venv",
+                "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+            }
+        }
+    },
+    "osx": {
+        "options": {
+            "env": {
+                "VIRTUAL_ENV": "${workspaceFolder}/.venv",
+                "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+            }
+        }
+    },
     "tasks": [
         // =====================================================
         // QUICK ACCESS (no prompts, one-click)
@@ -23,10 +53,7 @@
         {
             "label": "Build: Debug",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["build"],
             "group": {
                 "kind": "build",
@@ -46,10 +73,7 @@
         {
             "label": "Build: Release",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["build", "--release"],
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -66,10 +90,7 @@
         {
             "label": "Build: Debug (Clean First)",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["build", "--clean"],
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -86,10 +107,7 @@
         {
             "label": "Build: Release (Clean First)",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["build", "--release", "--clean"],
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -106,10 +124,7 @@
         {
             "label": "Rebuild: Debug (Full)",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["rebuild"],
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -126,10 +141,7 @@
         {
             "label": "Rebuild: Release (Full)",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["rebuild", "--release"],
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -146,10 +158,7 @@
         {
             "label": "Rebuild: All (Debug + Release)",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["rebuild", "--all"],
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
@@ -166,10 +175,7 @@
         {
             "label": "Install: Debug",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["install"],
             "group": "build",
             "problemMatcher": [],
@@ -186,10 +192,7 @@
         {
             "label": "Install: Release",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["install", "--release"],
             "group": "build",
             "problemMatcher": [],
@@ -206,10 +209,7 @@
         {
             "label": "Package: Release NSIS (Fresh Build)",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/sbuild",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe"
-            },
+            "command": "sbuild",
             "args": ["package", "--release", "--fresh", "--generator", "NSIS"],
             "group": "build",
             "problemMatcher": [],
@@ -230,16 +230,7 @@
         {
             "label": "Build...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild build ${input:configDRA} ${input:platform} ${input:arch} ${input:buildClean} ${input:verbose} ${input:jobs} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
@@ -252,16 +243,7 @@
         {
             "label": "Rebuild...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} ${input:cmakeArgs}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild rebuild ${input:configDRA} ${input:platform} ${input:arch} ${input:verbose} ${input:jobs} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
             "group": "build",
             "problemMatcher": ["$msCompile", "$gcc"],
             "presentation": {
@@ -274,16 +256,7 @@
         {
             "label": "Clean...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild clean ${input:configDR} ${input:platform} ${input:arch}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe clean ${input:configDR} ${input:platform} ${input:arch}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild clean ${input:configDR} ${input:platform} ${input:arch}",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
@@ -296,16 +269,7 @@
         {
             "label": "Configure...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} ${input:cmakeArgs}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild configure ${input:configDR} ${input:platform} ${input:arch} ${input:verbose} ${input:buildNumber} --cmake-args \"${input:cmakeArgs}\"",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
@@ -318,16 +282,7 @@
         {
             "label": "Install...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild install ${input:configDR} ${input:platform} ${input:arch} ${input:installPrefix} ${input:installComponent} ${input:systemInstall}",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
@@ -340,16 +295,7 @@
         {
             "label": "Test...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild test ${input:configDR} ${input:platform} ${input:arch} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
             "group": "test",
             "problemMatcher": [],
             "presentation": {
@@ -362,16 +308,7 @@
         {
             "label": "Test: Filter...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild test ${input:configDR} ${input:platform} ${input:arch} --filter ${input:testPattern} ${input:testMode} ${input:outputOnFailure} ${input:jobs} ${input:verbose}",
             "group": "test",
             "problemMatcher": [],
             "presentation": {
@@ -384,16 +321,7 @@
         {
             "label": "Package...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild package ${input:configDRA} ${input:platform} ${input:arch} ${input:packageGenerator} ${input:packageFresh} ${input:verbose} ${input:jobs}",
             "group": "build",
             "problemMatcher": [],
             "presentation": {
@@ -406,16 +334,7 @@
         {
             "label": "Serve...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild serve --platform wasm ${input:configDR} ${input:serveProtocol} ${input:port}",
             "group": "build",
             "isBackground": true,
             "problemMatcher": [],
@@ -429,16 +348,7 @@
         {
             "label": "Doctor...",
             "type": "shell",
-            "command": "${workspaceFolder}/.venv/bin/sbuild doctor ${input:doctorVerbose}",
-            "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\sbuild.exe doctor ${input:doctorVerbose}",
-                "options": {
-                    "shell": {
-                        "executable": "cmd.exe",
-                        "args": ["/d", "/c"]
-                    }
-                }
-            },
+            "command": "sbuild doctor ${input:doctorVerbose}",
             "group": "none",
             "problemMatcher": [],
             "presentation": {
@@ -614,7 +524,7 @@
         {
             "id": "cmakeArgs",
             "type": "promptString",
-            "description": "Extra CMake args (e.g. --cmake-args \"-DFOO=ON\", leave empty for none)",
+            "description": "Extra CMake defines (e.g. -DFOO=ON, leave empty for none)",
             "default": ""
         },
         {

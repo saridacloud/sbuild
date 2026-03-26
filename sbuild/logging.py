@@ -13,6 +13,8 @@ from typing import Optional
 
 from rich.console import Console
 
+_MAX_LOG_FILES = 10
+
 
 class LogManager:
     """Manages build log files with automatic rotation"""
@@ -66,7 +68,7 @@ class LogManager:
             reverse=True,
         )
 
-        for old_log in log_files[10:]:
+        for old_log in log_files[_MAX_LOG_FILES:]:
             try:
                 old_log.unlink()
                 self.write(f"Deleted old log: {old_log.name}")
@@ -119,9 +121,7 @@ class LoggingConsole:
         if self.log_manager:
             text_parts = []
             for arg in args:
-                plain = _strip_rich_markup(str(arg))
-                if not plain.startswith("<"):
-                    text_parts.append(plain)
+                text_parts.append(_strip_rich_markup(str(arg)))
 
             if text_parts:
                 self.log_manager.write(" ".join(text_parts))
