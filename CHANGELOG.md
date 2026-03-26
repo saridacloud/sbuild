@@ -7,77 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `UnicodeDecodeError` crash in build output reader thread when compiler output contains non-UTF-8 bytes (e.g. `0xb0` degree symbol on Linux) — subprocess pipes now use `errors="replace"` to substitute invalid bytes
+## [1.3.0] - 2026-03-26
 
 ### Added
 
+- `sbuild config` command — shows fully resolved configuration without building
+- `ConfigManager` class — single point of config resolution; receives raw CLI args, loads `.env` once, resolves everything via generic `_resolve()` method (CLI > .env > os.environ > default priority), and produces a fully-populated `BuildConfig`
+- `--fresh` option for `sbuild install` — clean rebuild before installing (mirrors `sbuild package --fresh`)
 - **Tool Versions** section in config dump — `sbuild config`, verbose mode, and build logs now show detected versions of Python, CMake, Conan, Git, and Ninja (native) or emcc (WASM)
 - `get_tool_version()` public helper in `doctor.py` — lightweight version detection for a single tool
-
-### Changed
-
-- **BREAKING:** `resolve_profile_path()` moved from module-level function to `NativeConfig._resolve_profile_path()` static method (no longer a public API)
-- **BREAKING:** `BuildConfig.get_resolved_build_number()` extracted to standalone `resolve_build_number(build_number, build_dir, project_root)` function
-- `NativeConfig.from_env()` classmethod now handles arch resolution, profile detection, and target arch detection (previously in `ConfigManager._build_native_config()`)
-- `WasmConfig.from_env()` classmethod now handles validation and environment dict construction (previously in `ConfigManager._build_wasm_config()`)
-- Architecture maps consolidated from 3 manually-maintained dicts (`_ARCH_MAPPING`, `_FRIENDLY_ARCH_MAP`, `_CONAN_TO_FRIENDLY_MAP`) to single canonical `_ARCH_TABLE` + derived dicts + `_MACHINE_TO_CONAN`
-- `ConfigManager` slimmed from ~237 to ~90 lines — delegates platform config construction to dataclass factory methods
-- Removed unused `platform_config` parameter from `_compute_build_dir()`, `_compute_preset_name()`, `_compute_build_preset_name()`
-- Removed standalone `_strip_quotes()` function — quote stripping inlined where needed
-
-### Added
-
-- `--fresh` option for `sbuild install` — clean rebuild before installing (mirrors `sbuild package --fresh`)
+- `BaseRunner.get_config_summary()` method for runner-specific config reporting
+- `NativeRunner.get_config_summary()` — reports Toolchain, Architecture, and Environment (.env) sections
+- `WasmRunner.get_config_summary()` — reports WASM Toolchain section
+- Resolved config automatically logged to build log file after runner initialization
+- Verbose mode (`-v`) and `sbuild config` display resolved config in console
 - `friendly_arch` field on `NativeConfig` — always populated (derived from `--arch` or host architecture), used for display and profile fallback
 - `conan_to_friendly_arch()` helper function — reverse mapping from Conan arch names to friendly equivalents (e.g. `x86_64` → `x64`)
 - Profile fallback for implicit arch — without `--arch`, tries `{os}_{friendly_arch}_{build_type}` profile before falling back to `{os}_{build_type}`
-
-### Removed
-
-- Architecture-isolated build directories — `--arch` no longer creates `build/{arch}/{build_type}` subfolders; build dir is always `build/{build_type}` (switch arch via rebuild)
-
-### Fixed
-
-- Rich Live panel leaving residual border/content lines after transient cleanup by switching to synchronous rendering (`auto_refresh=False` + explicit `refresh=True`)
-- VSCode tasks: venv-installed tools (conan, cmake, etc.) now found on all platforms — global `windows`/`linux`/`osx` blocks prepend `.venv` to PATH, simplifying all task commands to bare `sbuild` (removed per-task platform overrides)
-
-### Added
-
-- `ConfigManager` class — single point of config resolution; receives raw CLI args, loads `.env` once, resolves everything via generic `_resolve()` method (CLI > .env > os.environ > default priority), and produces a fully-populated `BuildConfig`
 - `detect_architecture()` standalone function (extracted from `NativeConfig.detect_architecture()`)
-
-### Changed
-
-- **BREAKING:** `BuildSession` now takes a pre-built `BuildConfig` instead of ~10 individual args
-- `BuildConfig`, `NativeConfig`, `WasmConfig` are now frozen dataclasses (pure data holders with no logic)
-- `WasmConfig.qt_host_path` uses `None` instead of empty `Path()` as sentinel for "not set"
-- Pre-computed fields on `BuildConfig`: `build_dir`, `preset_name`, `build_preset_name`, `project_name`, `version` (no longer properties or delegated to platform config)
-- `NativeConfig.env_vars` now includes SBUILD_* vars from os.environ, eliminating `WindowsEnv` os.environ fallbacks
-
-### Removed
-
-- `PlatformConfig` abstract base class — `NativeConfig` and `WasmConfig` are independent dataclasses
-- `_CONFIG_FACTORIES` registry — `ConfigManager` handles platform dispatch directly
-- 10+ individual `resolve_*()` functions — replaced by `ConfigManager._resolve()`
-- `NativeConfig.detect()` classmethod — logic moved to `ConfigManager._build_native_config()`
-- `WasmConfig.from_env()` classmethod — logic moved to `ConfigManager._build_wasm_config()`
-- `_get_project_env()` from CLI — `ConfigManager` loads `.env` internally
-- `BuildConfig.__post_init__` — all resolution moved to `ConfigManager.resolve()`
-- `get_environment()` methods from config classes — replaced by pre-computed `.environment` field on `WasmConfig`
-- `validate()`, `display_name`, `build_dir_name()`, `preset_name()`, `build_preset_name()` methods from config classes
-
-### Added (previous)
-
+- `normalize_arch()` helper function in `config.py`
 - Universal environment variable defaults: `SBUILD_PLATFORM`, `SBUILD_VERBOSE`, `SBUILD_BUILD_DIR`, `SBUILD_INSTALL_DIR`, `SBUILD_PARALLEL_JOBS`, `SBUILD_CMAKE_ARGS` — all configurable via `.env` or system env with CLI override
 - `SBUILD_WASM_CMAKE_ARGS` for WASM-specific cmake arguments
 - Auto-injection of `-DQT_HOST_PATH` and `-DOPENSSL_ROOT_DIR` cmake defines from WASM config vars
 - CMake args merging: `SBUILD_CMAKE_ARGS` + `SBUILD_WASM_CMAKE_ARGS` (if WASM) + CLI `--cmake-args` (last wins)
 - Quote stripping in `.env` file parser — `SBUILD_CMAKE_ARGS="-DFOO=BAR"` now works correctly
 - OpenSSL binary lookup: tries `openssl` from PATH first, falls back to `SBUILD_WASM_OPENSSL_ROOT_DIR/bin/openssl`
-- Resolver functions for all new env vars following CLI > .env > system env > default priority
-- `_get_project_env()` in CLI for lazy-loaded `.env` caching
+- Tests for config dump feature (`tests/test_config_dump.py`)
+- Tests for `normalize_arch()` and corrected architecture fallback behavior
 
 ### Changed
 
@@ -91,83 +47,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** Single `.env` file replaces `.env` + `.env.wasm` split — all WASM vars now live in `.env`
 - **BREAKING:** `WasmConfig.from_env_file()` replaced with `WasmConfig.from_env(env_vars)` — receives pre-loaded dict instead of file path
 - **BREAKING:** `WasmConfig.openssl_path` renamed to `WasmConfig.openssl_root_dir`
+- **BREAKING:** `BuildSession` now takes a pre-built `BuildConfig` instead of ~10 individual args
+- **BREAKING:** `resolve_profile_path()` moved from module-level function to `NativeConfig._resolve_profile_path()` static method (no longer a public API)
+- **BREAKING:** `BuildConfig.get_resolved_build_number()` extracted to standalone `resolve_build_number(build_number, build_dir, project_root)` function
+- `BuildConfig`, `NativeConfig`, `WasmConfig` are now frozen dataclasses (pure data holders with no logic)
+- `NativeConfig.from_env()` classmethod now handles arch resolution, profile detection, and target arch detection
+- `WasmConfig.from_env()` classmethod now handles validation and environment dict construction
 - `BuildConfig` now loads `.env` centrally and passes `env_vars` to platform config factories
 - `BuildConfig.build_dir` uses configurable `build_dir_base` (from `SBUILD_BUILD_DIR`) instead of hardcoded `"build"`
-- `NativeConfig.detect()` accepts optional `env_vars` parameter (avoids re-loading `.env`)
+- Pre-computed fields on `BuildConfig`: `build_dir`, `preset_name`, `build_preset_name`, `project_name`, `version` (no longer properties or delegated to platform config)
+- `NativeConfig.env_vars` now includes SBUILD_* vars from os.environ, eliminating `WindowsEnv` os.environ fallbacks
+- `WasmConfig.qt_host_path` uses `None` instead of empty `Path()` as sentinel for "not set"
+- Architecture maps consolidated from 3 manually-maintained dicts (`_ARCH_MAPPING`, `_FRIENDLY_ARCH_MAP`, `_CONAN_TO_FRIENDLY_MAP`) to single canonical `_ARCH_TABLE` + derived dicts + `_MACHINE_TO_CONAN`
+- `ConfigManager` slimmed from ~237 to ~90 lines — delegates platform config construction to dataclass factory methods
 - CLI option defaults changed from hardcoded values to `None` with env-var resolution in command bodies
 - `WasmConfig.get_environment()` maps `SBUILD_WASM_QT_PATH` back to `QT_WASM_PATH` for cmake preset compatibility
 - `sbuild doctor` WASM checks now detect WASM presence by `EMSDK`/`SBUILD_WASM_QT_PATH` in unified `.env`
 - Config dump labels updated to show new `SBUILD_` variable names
-
-### Removed
-
-- `.env.wasm` file support — all configuration now lives in a single `.env` file
-- `wasm_env_file` test fixture (replaced with `wasm_env_vars` dict fixture)
-
-### Changed
-
+- Renamed `NativeConfig.arch` to `host_arch` for clarity
+- `BuildSession` now accepts a `command` parameter to track the active CLI command
+- `show_header()` no longer takes an `action` argument — uses `self.command` instead
+- Early CLI parameter logging replaced with single `Command: sbuild {command}` line for crash safety
+- Resolved config log now includes `Command` and `Verbose` fields
+- Console config output now includes `Command` field
 - Extract magic numbers in `BaseRunner` to named class constants (`_PANEL_MAX_LINES`, `_PANEL_HEIGHT`, `_ERROR_TAIL_LINES`, etc.)
 - Extract `_MAX_LOG_FILES` constant in `LogManager` log rotation
+- Extract `_build_type()` helper in `cli.py` to replace 7 repeated ternary expressions
+- Consolidate duplicate "build dir not found" guard into `BaseRunner._require_build_dir()` helper
+- Use `contextlib.chdir` instead of manual `os.chdir`/restore in `BaseRunner.package()` and `serve_common()`
+- Deduplicate profiles-dir listing in `NativeRunner.configure()` error handling
+- Hoist deferred `ConfigError` and `BuildError` imports to module-level in `native.py` and `base.py`
+- Simplify `console.py` by removing unnecessary intermediate variable
 - Simplify error keyword matching in `BaseRunner._show_error_output()` with case-insensitive comparison
 - Narrow bare `except Exception` blocks to specific exception types in `_read_process_output`, `_load_cache`/`_save_cache`, and `DoctorReport.__post_init__`
 - Replace `assert isinstance(...)` with `TypeError` raise in `NativeRunner` and `WasmRunner` constructors
-- Remove unused `**kwargs` parameter from `WasmRunner.serve()`
-- Remove dead `startswith("<")` filter in `LoggingConsole.print()`
 - Add type hints to `BaseRunner._read_process_output()` and `_live_console` property
 
 ### Removed
 
+- `.env.wasm` file support — all configuration now lives in a single `.env` file
+- `PlatformConfig` abstract base class — `NativeConfig` and `WasmConfig` are independent dataclasses
+- `_CONFIG_FACTORIES` registry — `ConfigManager` handles platform dispatch directly
+- 10+ individual `resolve_*()` functions — replaced by `ConfigManager._resolve()`
+- `NativeConfig.detect()` classmethod — replaced by `NativeConfig.from_env()`
+- `BuildConfig.__post_init__` — all resolution moved to `ConfigManager.resolve()`
+- `get_environment()` methods from config classes — replaced by pre-computed `.environment` field on `WasmConfig`
+- `validate()`, `display_name`, `build_dir_name()`, `preset_name()`, `build_preset_name()` methods from config classes
+- Architecture-isolated build directories — `--arch` no longer creates `build/{arch}/{build_type}` subfolders; build dir is always `build/{build_type}` (switch arch via rebuild)
+- Legacy `NativeConfig.detect_target_architecture()` method (superseded by `NativeConfig.from_env()`)
 - Unused `VALID_ARCH_VALUES` constant from `config.py`
 - Unused `BuildConfig.is_windows` property (use `IS_WINDOWS` constant instead)
 - Unused public API exports from `__init__.py` (`LoggingConsole`, `PlatformConfig`, `parse_conan_profile_arch`)
 - Redundant `NativeRunner` class-attribute overrides (`supports_tests`, `supports_serve`) identical to `BaseRunner` defaults
 - No-op `NativeRunner._prepare_command()` override
 - Dead `hasattr` branch in `BaseRunner._live_console` property
-
-### Changed
-
-- Consolidate duplicate "build dir not found" guard into `BaseRunner._require_build_dir()` helper
-- Extract `_build_type()` helper in `cli.py` to replace 7 repeated ternary expressions
-- Use `contextlib.chdir` instead of manual `os.chdir`/restore in `BaseRunner.package()` and `serve_common()`
-- Deduplicate profiles-dir listing in `NativeRunner.configure()` error handling
-- Hoist deferred `ConfigError` and `BuildError` imports to module-level in `native.py` and `base.py`
-- Simplify `console.py` by removing unnecessary intermediate variable
-
-### Added
-
-- `sbuild config` command — shows fully resolved configuration without building
-- `BaseRunner.get_config_summary()` method for runner-specific config reporting
-- `NativeRunner.get_config_summary()` — reports Toolchain, Architecture, and Environment (.env) sections
-- `WasmRunner.get_config_summary()` — reports WASM Toolchain section
-- Resolved config automatically logged to build log file after runner initialization
-- Verbose mode (`-v`) and `sbuild config` display resolved config in console
-- `normalize_arch()` helper function in `config.py`
-- Tests for config dump feature (`tests/test_config_dump.py`)
-- Tests for `normalize_arch()` and corrected architecture fallback behavior
+- Unused `**kwargs` parameter from `WasmRunner.serve()`
+- Dead `startswith("<")` filter in `LoggingConsole.print()`
+- Standalone `_strip_quotes()` function — quote stripping inlined where needed
+- Unused `platform_config` parameter from `_compute_build_dir()`, `_compute_preset_name()`, `_compute_build_preset_name()`
+- `wasm_env_file` test fixture (replaced with `wasm_env_vars` dict fixture)
 
 ### Fixed
 
+- `UnicodeDecodeError` crash in build output reader thread when compiler output contains non-UTF-8 bytes (e.g. `0xb0` degree symbol on Linux) — subprocess pipes now use `errors="replace"` to substitute invalid bytes
+- Rich markup in console output not escaped — special characters in paths, error messages, and commands could be misinterpreted as Rich markup tags
+- Rich Live panel leaving residual border/content lines after transient cleanup by switching to synchronous rendering (`auto_refresh=False` + explicit `refresh=True`)
 - `.env` variable changes now take effect immediately without clearing the vcvarsall cache — previously, cached environment snapshots contained stale `.env` values that persisted until the cache was invalidated
+- VSCode tasks: venv-installed tools (conan, cmake, etc.) now found on all platforms — global `windows`/`linux`/`osx` blocks prepend `.venv` to PATH, simplifying all task commands to bare `sbuild` (removed per-task platform overrides)
 - VSCode tasks now correctly wrap cmake defines with `--cmake-args` flag instead of passing bare `-D` args
 - Empty cmake args from VSCode prompt no longer append an empty string to cmake commands
 - Target architecture detection now correctly normalizes friendly arch names (e.g. `x64` → `x86_64`) before falling back, fixing incorrect architecture when using `--arch` with profiles that don't specify `arch=`
 - Configure status message now shows target architecture instead of host architecture
-
-### Changed
-
-- Renamed `NativeConfig.arch` to `host_arch` for clarity
-
-### Removed
-
-- Legacy `NativeConfig.detect_target_architecture()` method (superseded by `detect()` + `_detect_target_arch()`)
-
-### Changed
-
-- `BuildSession` now accepts a `command` parameter to track the active CLI command
-- `show_header()` no longer takes an `action` argument — uses `self.command` instead
-- Early CLI parameter logging replaced with single `Command: sbuild {command}` line for crash safety
-- Resolved config log now includes `Command` and `Verbose` fields
-- Console config output now includes `Command` field
 
 ## [1.2.0] - 2026-02-13
 
@@ -302,7 +252,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment variable loading from `.env` (native) and `.env.wasm` (WebAssembly)
 - Build number auto-detection from git commit count or `version.h`
 
-[Unreleased]: https://github.com/saridacloud/sbuild/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/saridacloud/sbuild/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/saridacloud/sbuild/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/saridacloud/sbuild/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/saridacloud/sbuild/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/saridacloud/sbuild/compare/v1.0.0...v1.0.1
