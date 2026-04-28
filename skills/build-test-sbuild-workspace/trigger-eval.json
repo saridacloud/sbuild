@@ -1,0 +1,82 @@
+[
+  {
+    "query": "I just changed the CMakeLists.txt to add a new library target and now `sbuild build` is giving me weird linker errors about missing symbols. The build was working fine before my changes. Can you figure out what's going on?",
+    "should_trigger": true
+  },
+  {
+    "query": "hey so I'm getting 'sbuild: command not found' when I try to build this project, I just cloned it and ran the setup script but something's off",
+    "should_trigger": true
+  },
+  {
+    "query": "can you run just the FlightPlan tests in release mode? I changed some trajectory calculation logic and want to make sure nothing broke before I push",
+    "should_trigger": true
+  },
+  {
+    "query": "I added SBUILD_WASM_QT_PATH to my .env but the wasm build still can't find Qt — it's looking in the wrong place. Here's my .env file, what am I doing wrong?",
+    "should_trigger": true
+  },
+  {
+    "query": "the build failed again, I already tried rebuilding twice. there's something in build_logs/ but I don't know what to look for. can you check the latest log and tell me what's actually failing?",
+    "should_trigger": true
+  },
+  {
+    "query": "I need to switch this project from debug to release builds for the demo on Friday, and also make sure the packaging step produces an NSIS installer. What's the right way to do all that with sbuild?",
+    "should_trigger": true
+  },
+  {
+    "query": "we just updated conanfile.py to bump the boost dependency from 1.82 to 1.84 and added a new require for spdlog. whats the minimum I need to do to get this building again — I don't want to wait for a full clean if I don't have to",
+    "should_trigger": true
+  },
+  {
+    "query": "something's wrong with the environment — cmake isn't being found even though it's definitely installed. before we go down a rabbit hole can you just check if everything looks ok?",
+    "should_trigger": true
+  },
+  {
+    "query": "I want to cross-compile this for arm64 but I'm not sure which env vars to set or if I need a special conan profile. the project currently builds fine for x64",
+    "should_trigger": true
+  },
+  {
+    "query": "build this project please",
+    "should_trigger": true
+  },
+  {
+    "query": "I'm writing a Python CLI tool with Click that processes CSV files. Can you help me add a --verbose flag and proper error handling for missing files?",
+    "should_trigger": false
+  },
+  {
+    "query": "can you set up a CMakeLists.txt from scratch for my new C++ project? I want to use vcpkg for dependency management and target both linux and windows",
+    "should_trigger": false
+  },
+  {
+    "query": "I need to write a conanfile.py for my library — it depends on fmt and spdlog, and I want to export it to our internal conan remote. Can you help with the recipe?",
+    "should_trigger": false
+  },
+  {
+    "query": "the .env file in my Django project has the DATABASE_URL wrong and my migrations keep failing. can you check what's going on with my docker-compose postgres setup?",
+    "should_trigger": false
+  },
+  {
+    "query": "I'm trying to get emscripten working to compile my C game to wasm. I installed emsdk but emcc isn't on my path and I keep getting errors when I run emmake make",
+    "should_trigger": false
+  },
+  {
+    "query": "can you help me write a Makefile for this C project? it has three source files and needs to link against libpthread and libm",
+    "should_trigger": false
+  },
+  {
+    "query": "I want to add unit tests to my Python project using pytest. The tests/ directory already exists but conftest.py is empty. Where should I start?",
+    "should_trigger": false
+  },
+  {
+    "query": "my ninja build is failing with 'build.ninja:42: multiple rules generate libfoo.a'. I'm using cmake with the Ninja generator directly, not through any wrapper. how do I fix this?",
+    "should_trigger": false
+  },
+  {
+    "query": "I need to set up CI/CD for this repo — github actions, build on push, run ctest, deploy artifacts to our S3 bucket. The project uses cmake and conan but all the build commands are manual right now",
+    "should_trigger": false
+  },
+  {
+    "query": "can you refactor this C++ class to use the pimpl idiom? the header is getting too heavy with all these includes and it's slowing down compilation across the whole project",
+    "should_trigger": false
+  }
+]
