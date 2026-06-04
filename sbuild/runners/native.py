@@ -4,6 +4,7 @@ sbuild - Native runner
 Build runner for native (conan + cmake) builds with vcvarsall.bat support on Windows.
 """
 
+import json
 import os
 import sys
 import time
@@ -90,13 +91,74 @@ class NativeRunner(BaseRunner):
         if not self.run_command(cmd, f"Installing dependencies (arch: {arch})"):
             return False
 
+        # Reconcile the presets Conan just generated. Multi-config generators (VS)
+        # emit 'conan-default' for every build type and Conan's root
+        # CMakeUserPresets.json includes both Debug and Release generator presets,
+        # which makes CMake abort with "Duplicate preset: conan-default". This pins
+        # the root file to the current build type and returns the real preset name.
+        configure_preset = self._reconcile_cmake_presets()
+
         # Generate build files with CMake
-        cmd = f"cmake -Wno-dev --preset {self.config.preset_name}"
+        cmd = f"cmake -Wno-dev --preset {configure_preset}"
         if self.config.build_number is not None:
             cmd += f" -DBUILD_NUMBER={self.config.build_number}"
         if self.config.cmake_args:
             cmd += f" {self.config.cmake_args}"
         return self.run_command(cmd, "Configuring project")
+
+    def _reconcile_cmake_presets(self) -> str:
+        """Pin CMakeUserPresets.json to the current build type and return its
+        configure preset.
+
+        Multi-config generators (Visual Studio) emit the configure preset
+        ``conan-default`` for *every* build type, and Conan's root
+        ``CMakeUserPresets.json`` includes both the Debug and Release generator
+        preset files -- CMake then refuses to read them with
+        ``Duplicate preset: "conan-default"``. Single-config generators (Ninja)
+        emit a distinct ``conan-<type>`` preset instead.
+
+        Read the configure preset name back from the freshly generated
+        ``build/<type>/generators/CMakePresets.json`` (so we don't depend on the
+        convention-based guess made before ``conan install``) and rewrite the
+        root file to include only this build type's presets.
+        """
+        gen_presets = self.config.build_dir / "generators" / "CMakePresets.json"
+        configure_preset = self.config.preset_name
+        if not gen_presets.exists():
+            return configure_preset
+
+        try:
+            data = json.loads(gen_presets.read_text(encoding="utf-8"))
+            names = [p["name"] for p in data.get("configurePresets", []) if "name" in p]
+        except (json.JSONDecodeError, OSError):
+            return configure_preset
+
+        conventional = f"conan-{self.config.build_type.lower()}"
+        if conventional in names:
+            configure_preset = conventional
+        elif "conan-default" in names:
+            configure_preset = "conan-default"
+        elif names:
+            configure_preset = names[0]
+
+        try:
+            include_rel = gen_presets.relative_to(self.config.project_root).as_posix()
+        except ValueError:
+            include_rel = gen_presets.as_posix()
+
+        user_presets = self.config.project_root / "CMakeUserPresets.json"
+        payload = {"version": 4, "vendor": {"conan": {}}, "include": [include_rel]}
+        try:
+            user_presets.write_text(json.dumps(payload, indent=4) + "\n", encoding="utf-8")
+            if self.log_manager:
+                self.log_manager.write(
+                    f"Pinned CMakeUserPresets.json to {include_rel} (configure preset: {configure_preset})"
+                )
+        except OSError as exc:
+            if self.log_manager:
+                self.log_manager.write(f"Warning: could not rewrite CMakeUserPresets.json: {exc}")
+
+        return configure_preset
 
     def build(self) -> bool:
         """Build the project"""

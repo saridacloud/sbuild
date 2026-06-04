@@ -114,6 +114,11 @@ class BaseRunner(ABC):
 
         cmd = f"cmake --install {self.config.build_dir}"
 
+        # Multi-config generators (e.g. Visual Studio) require --config to pick the
+        # build type; without it CMake defaults to "Release" and looks for artifacts
+        # in the wrong per-config subfolder. Harmless for single-config generators.
+        cmd += f" --config {self.config.build_type}"
+
         if prefix:
             cmd += f" --prefix {prefix}"
 
