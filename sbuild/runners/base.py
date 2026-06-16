@@ -86,8 +86,26 @@ class BaseRunner(ABC):
     def clean(self) -> bool:
         """Clean build directory"""
         if self.config.build_dir.exists():
+            import os
+            import stat
+
+            def _on_rm_error(func, path, _exc):
+                # FetchContent fetches deps (e.g. jwt_cpp, glfw) as git repos under
+                # _deps/; git marks .git/objects/pack/*.idx|*.pack read-only, so
+                # rmtree fails with PermissionError (WinError 5) on Windows. Clear
+                # the read-only bit and retry.
+                try:
+                    os.chmod(path, stat.S_IWRITE)
+                    func(path)
+                except OSError:
+                    pass
+
             try:
-                shutil.rmtree(self.config.build_dir)
+                try:
+                    shutil.rmtree(self.config.build_dir, onexc=_on_rm_error)
+                except TypeError:
+                    # Python < 3.12 uses the legacy onerror parameter
+                    shutil.rmtree(self.config.build_dir, onerror=_on_rm_error)
                 console.print(
                     f"[green][OK][/green] Cleaned {self.config.build_type} build"
                 )
